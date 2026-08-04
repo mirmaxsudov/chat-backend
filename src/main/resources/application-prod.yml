@@ -1,0 +1,21 @@
+spring:
+  config:
+    import: "classpath:/config/secrets.yaml"
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://127.0.0.1:5432/chat
+    username: ${secrets.database.username}
+    password: ${secrets.database.password}
+  jpa:
+    show-sql: true
+    generate-ddl: true
+server:
+  port: 8080
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: always
