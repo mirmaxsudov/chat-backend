@@ -1,5 +1,5 @@
 package uz.mirmaxsudov.chatclonebackend.model.enums.chat;
 
 public enum MemberRole {
-    OWNER, ADMIN, MEMBER, BOT;
+    OWNER, ADMIN, MEMBER, BOT
 }

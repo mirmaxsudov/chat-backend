@@ -17,7 +17,6 @@ public class SoftDeleteEventListener implements DeleteEventListener {
         if (entity instanceof BaseEntity base) {
             base.setDeleted(true);
             base.setDeletedAt(LocalDateTime.now());
-            deleteEvent.getSession().merge(base);
             deleteEvent.getSession().flush();
         }
     }

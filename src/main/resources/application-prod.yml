@@ -16,6 +16,6 @@ server:
       max-file-size: 50MB
       max-request-size: 50MB
   error:
-    include-message: always
-    include-binding-errors: always
-    include-stacktrace: always
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never

@@ -19,3 +19,9 @@ server:
     include-message: always
     include-binding-errors: always
     include-stacktrace: always
+
+app:
+  seed:
+    fake-users:
+      enabled: false
+      password: ${FAKE_USERS_PASSWORD:FakeUser123!}
