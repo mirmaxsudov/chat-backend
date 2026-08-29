@@ -3,3 +3,14 @@ spring:
     name: chat
   profiles:
     active: dev
+
+app:
+  security:
+    jwt:
+      secret-key: ${secrets.jwt.secret-key}
+      access-expiration-ms: ${secrets.jwt.access-expiration-ms}
+      refresh-expiration-ms: ${secrets.jwt.refresh-expiration-ms}
+      issuer: chat-clone-backend
+      audience: chat-clone-api
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

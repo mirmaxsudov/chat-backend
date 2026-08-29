@@ -95,6 +95,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ApiErrorResponse(exception.getMessage(), HttpStatus.UNAUTHORIZED, LocalDateTime.now(), 401);
     }
 
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    @ExceptionHandler(UnauthorizedException.class)
+    public ApiErrorResponse handleUnauthorizedException(UnauthorizedException exception) {
+        return new ApiErrorResponse(exception.getMessage(), HttpStatus.UNAUTHORIZED, LocalDateTime.now(), 401);
+    }
+
     @ResponseStatus(HttpStatus.UNPROCESSABLE_ENTITY)
     @ExceptionHandler(CustomInvalidDtoException.class)
     public ApiErrorResponse handleInvalidDtoException(CustomInvalidDtoException exception) {

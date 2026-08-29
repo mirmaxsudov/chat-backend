@@ -16,7 +16,7 @@ public class UserQueryRepositoryImpl implements UserQueryRepository {
     private final static QUser user = QUser.user;
 
     @Override
-    public List<User> searchByUsernameOrName(String keyword) {
+    public List<User> searchByUsername(String keyword) {
         return jpaQueryFactory.selectFrom(user)
                 .where(
                         user.username.containsIgnoreCase(keyword)
