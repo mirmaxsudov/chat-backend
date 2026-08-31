@@ -14,3 +14,25 @@ app:
       audience: chat-clone-api
     cors:
       allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+springwolf:
+  use-fqn: false
+  docket:
+    base-package: uz.mirmaxsudov.chatclonebackend
+    info:
+      title: Chat Realtime API
+      version: 1.0.0
+      description: Receive-only STOMP events for direct messages and saved messages. Message creation uses the REST API.
+    servers:
+      chat-websocket:
+        host: ${ASYNCAPI_WS_HOST:localhost:8080}
+        protocol: ws
+        pathname: /ws
+        description: "Authenticate by sending Authorization: Bearer <JWT> in the STOMP CONNECT headers."
+        security:
+          - type: http
+            description: JWT bearer token supplied in the STOMP CONNECT Authorization header.
+  plugin:
+    stomp:
+      endpoint:
+        user: /user

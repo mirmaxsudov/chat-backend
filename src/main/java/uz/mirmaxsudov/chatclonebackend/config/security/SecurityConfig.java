@@ -51,8 +51,10 @@ public class SecurityConfig {
                             .requestMatchers(
                                     "/v3/api-docs/**",
                                     "/swagger-ui/**",
-                                    "/swagger-ui.html"
+                                    "/swagger-ui.html",
+                                    "/springwolf/**"
                             ).permitAll()
+                            .requestMatchers("/ws", "/ws/**").permitAll()
                             .anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(oauth2 -> oauth2
