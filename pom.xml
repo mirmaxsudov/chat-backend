@@ -24,6 +24,7 @@
         <java.version>21</java.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <openfeign.querydsl.version>7.5</openfeign.querydsl.version>
+        <springwolf.version>2.6.0</springwolf.version>
     </properties>
 
     <dependencies>
@@ -77,6 +78,19 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>3.1.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.springwolf</groupId>
+            <artifactId>springwolf-stomp</artifactId>
+            <version>${springwolf.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>io.github.springwolf</groupId>
+            <artifactId>springwolf-ui</artifactId>
+            <version>${springwolf.version}</version>
+            <scope>runtime</scope>
         </dependency>
 
         <!-- QueryDSL -->

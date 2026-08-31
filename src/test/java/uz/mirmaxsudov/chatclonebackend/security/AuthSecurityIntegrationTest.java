@@ -122,6 +122,28 @@ class AuthSecurityIntegrationTest {
     }
 
     @Test
+    void sockJsHandshakeEndpointIsOpenForStompLevelAuthentication() throws Exception {
+        mockMvc.perform(get("/ws/info"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.websocket").value(true));
+    }
+
+    @Test
+    void asyncApiDocumentationIsPublicAndContainsPrivateMessageTopic() throws Exception {
+        mockMvc.perform(get("/springwolf/docs")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.info.title").value("Chat Realtime API"))
+                .andExpect(jsonPath("$.servers.chat-websocket.pathname").value("/ws"))
+                .andExpect(jsonPath("$.channels._user_queue_messages.address")
+                        .value("/user/queue/messages"))
+                .andExpect(jsonPath("$.components.schemas.RealtimeMessageEvent").exists());
+
+        mockMvc.perform(get("/springwolf/asyncapi-ui.html"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void loginValidatesRequiredFields() throws Exception {
         mockMvc.perform(post("/api/v1/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
