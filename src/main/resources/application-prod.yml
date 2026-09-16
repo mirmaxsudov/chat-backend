@@ -9,6 +9,11 @@ spring:
   jpa:
     show-sql: true
     generate-ddl: true
+
+logging:
+  level:
+    uz.mirmaxsudov.chatclonebackend: ${LOG_LEVEL_APP:INFO}
+
 server:
   port: 8080
   servlet:

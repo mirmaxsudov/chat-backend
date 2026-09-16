@@ -1,6 +1,7 @@
 package uz.mirmaxsudov.chatclonebackend.service.impl.chat;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ChatServiceImpl implements ChatService {
     private static final long FIRST_PAGE_CURSOR = Long.MAX_VALUE;
 
@@ -65,8 +67,14 @@ public class ChatServiceImpl implements ChatService {
         DmLink existing = dmLinkRepository.findActiveByUsers(pair.first().getId(), pair.second().getId())
                 .orElse(null);
 
-        if (existing != null)
+        if (existing != null) {
+            log.debug(
+                    "Returning existing direct chat: chatId={}, requesterId={}",
+                    existing.getChat().getId(),
+                    currentUserId
+            );
             return getChat(currentUserId, existing.getChat().getId());
+        }
 
 
         UUID chatId;
@@ -77,10 +85,22 @@ public class ChatServiceImpl implements ChatService {
                     currentUserId
             );
         } catch (DataIntegrityViolationException exception) {
+            log.warn(
+                    "Direct chat creation race detected; loading winner: requesterId={}, targetUserId={}",
+                    currentUserId,
+                    targetUser.getId()
+            );
             chatId = dmLinkRepository.findActiveByUsers(pair.first().getId(), pair.second().getId())
                     .map(link -> link.getChat().getId())
                     .orElseThrow(() -> exception);
         }
+
+        log.info(
+                "Direct chat ready: chatId={}, requesterId={}, targetUserId={}",
+                chatId,
+                currentUserId,
+                targetUser.getId()
+        );
 
         return getChat(currentUserId, chatId);
     }
@@ -90,6 +110,11 @@ public class ChatServiceImpl implements ChatService {
         SavedChatLink existing = savedChatLinkRepository.findActiveByUserId(currentUserId)
                 .orElse(null);
         if (existing != null) {
+            log.debug(
+                    "Returning existing saved chat: chatId={}, userId={}",
+                    existing.getChat().getId(),
+                    currentUserId
+            );
             return getChat(currentUserId, existing.getChat().getId());
         }
 
@@ -97,10 +122,13 @@ public class ChatServiceImpl implements ChatService {
         try {
             chatId = savedChatTransactionalCreator.create(currentUserId);
         } catch (DataIntegrityViolationException exception) {
+            log.warn("Saved chat creation race detected; loading winner: userId={}", currentUserId);
             chatId = savedChatLinkRepository.findActiveByUserId(currentUserId)
                     .map(link -> link.getChat().getId())
                     .orElseThrow(() -> exception);
         }
+
+        log.info("Saved chat ready: chatId={}, userId={}", chatId, currentUserId);
 
         return getChat(currentUserId, chatId);
     }
@@ -113,7 +141,9 @@ public class ChatServiceImpl implements ChatService {
                 currentUserId,
                 PageRequest.of(page, size)
         );
+
         if (chats.isEmpty()) {
+            log.debug("Chat list is empty: userId={}, page={}, size={}", currentUserId, page, size);
             return Page.empty(chats.getPageable());
         }
 
@@ -128,7 +158,7 @@ public class ChatServiceImpl implements ChatService {
                 .stream()
                 .collect(Collectors.toMap(message -> message.getChat().getId(), Function.identity()));
 
-        return chats.map(chat -> toChatResponse(
+        Page<ChatResponse> results = chats.map(chat -> toChatResponse(
                 chat,
                 chat.getType() == ChatType.SAVED
                         ? currentUser
@@ -136,6 +166,16 @@ public class ChatServiceImpl implements ChatService {
                 latestMessages.get(chat.getId()),
                 currentUserId
         ));
+
+        log.debug(
+                "Chat list loaded: userId={}, page={}, size={}, resultCount={}, hasNext={}",
+                currentUserId,
+                page,
+                size,
+                results.getNumberOfElements(),
+                results.hasNext()
+        );
+        return results;
     }
 
     @Override
@@ -145,10 +185,10 @@ public class ChatServiceImpl implements ChatService {
         User peer = chat.getType() == ChatType.SAVED
                 ? findUser(currentUserId)
                 : chatMemberRepository.findByChatIdAndUserIdNotAndDeletedFalse(chatId, currentUserId)
-                        .stream()
-                        .map(ChatMember::getUser)
-                        .findFirst()
-                        .orElseThrow(() -> new CustomNotFoundException("Chat not found"));
+                .stream()
+                .map(ChatMember::getUser)
+                .findFirst()
+                .orElseThrow(() -> new CustomNotFoundException("Chat not found"));
         Message latestMessage = messageRepository.findLatestByChatIds(List.of(chatId))
                 .stream()
                 .findFirst()
@@ -185,6 +225,14 @@ public class ChatServiceImpl implements ChatService {
                 ? results.getLast().seq()
                 : null;
 
+        log.debug(
+                "Message history loaded: chatId={}, userId={}, beforeSeq={}, resultCount={}, hasNext={}",
+                chatId,
+                currentUserId,
+                beforeSeq,
+                results.size(),
+                messages.hasNext()
+        );
         return new MessageHistoryResponse(results, nextCursor, messages.hasNext());
     }
 
@@ -222,6 +270,15 @@ public class ChatServiceImpl implements ChatService {
                 message.getCreatedAt(),
                 recipientIds
         ));
+
+        log.info(
+                "Message created: messageId={}, chatId={}, seq={}, senderId={}, recipientCount={}",
+                message.getId(),
+                chatId,
+                message.getSeq(),
+                currentUserId,
+                recipientIds.size()
+        );
 
         return toMessageResponse(message, currentUserId);
     }

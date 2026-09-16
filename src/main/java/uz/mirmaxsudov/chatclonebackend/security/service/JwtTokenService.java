@@ -1,6 +1,7 @@
 package uz.mirmaxsudov.chatclonebackend.security.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -20,6 +21,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class JwtTokenService {
     private final JwtEncoder jwtEncoder;
     private final JwtProperties properties;
@@ -48,6 +50,8 @@ public class JwtTokenService {
                 .build();
         String accessToken = jwtEncoder.encode(JwtEncoderParameters.from(headers, claims))
                 .getTokenValue();
+
+        log.debug("Access token issued: userId={}, expiresAt={}", principal.user().getId(), expiresAt);
 
         return new LoginResponse(accessToken, "Bearer", expiresAt);
     }

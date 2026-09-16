@@ -24,8 +24,8 @@ import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 import java.util.List;
 import java.util.UUID;
 
-@RestController
 @Validated
+@RestController
 @RequiredArgsConstructor
 @RequestMapping(APIUtil.API_BASE_URL + "chats")
 public class ChatController {
@@ -67,6 +67,7 @@ public class ChatController {
                 .total((int) Math.min(chats.getTotalElements(), Integer.MAX_VALUE))
                 .page(chats.getNumber())
                 .size(chats.getSize())
+                .hasPrev(chats.hasPrevious())
                 .hasNext(chats.hasNext())
                 .build());
     }

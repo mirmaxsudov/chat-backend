@@ -14,5 +14,6 @@ public class ApiPaginateResponse<T> {
     private int total;
     private int page;
     private int size;
+    private boolean hasPrev;
     private boolean hasNext;
 }

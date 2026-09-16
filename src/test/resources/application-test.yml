@@ -9,6 +9,14 @@ spring:
       ddl-auto: create-drop
     show-sql: false
 
+minio:
+  enabled: false
+
+logging:
+  level:
+    root: WARN
+    uz.mirmaxsudov.chatclonebackend: INFO
+
 app:
   security:
     jwt:

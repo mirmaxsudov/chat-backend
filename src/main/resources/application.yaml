@@ -4,7 +4,15 @@ spring:
   profiles:
     active: dev
 
+logging:
+  file:
+    path: ${LOG_DIR:logs}
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+
 app:
+  logging:
+    time-zone: ${LOG_TIME_ZONE:Asia/Tashkent}
   security:
     jwt:
       secret-key: ${secrets.jwt.secret-key}
@@ -13,7 +21,7 @@ app:
       issuer: chat-clone-backend
       audience: chat-clone-api
     cors:
-      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+      allowed-origins: http://localhost:3000
 
 springwolf:
   use-fqn: false
@@ -25,7 +33,7 @@ springwolf:
       description: Receive-only STOMP events for direct messages and saved messages. Message creation uses the REST API.
     servers:
       chat-websocket:
-        host: ${ASYNCAPI_WS_HOST:localhost:8080}
+        host: localhost:8080
         protocol: ws
         pathname: /ws
         description: "Authenticate by sending Authorization: Bearer <JWT> in the STOMP CONNECT headers."

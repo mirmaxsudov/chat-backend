@@ -6,6 +6,5 @@ import uz.mirmaxsudov.chatclonebackend.model.response.ApiResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.auth.LoginResponse;
 
 public interface AuthService {
-
     ResponseEntity<ApiResponse<LoginResponse>> login(LoginRequest request);
 }
