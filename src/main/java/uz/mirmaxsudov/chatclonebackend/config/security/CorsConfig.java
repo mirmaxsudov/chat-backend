@@ -31,9 +31,23 @@ public class CorsConfig {
         configuration.setAllowedHeaders(List.of(
                 HttpHeaders.AUTHORIZATION,
                 HttpHeaders.CONTENT_TYPE,
-                HttpHeaders.ACCEPT
+                HttpHeaders.ACCEPT,
+                "X-Request-ID",
+                "Tus-Resumable",
+                "Upload-Length",
+                "Upload-Offset",
+                "Upload-Metadata"
         ));
-        configuration.setExposedHeaders(List.of(HttpHeaders.LOCATION));
+        configuration.setExposedHeaders(List.of(
+                HttpHeaders.LOCATION,
+                "X-Request-ID",
+                "Tus-Resumable",
+                "Tus-Version",
+                "Tus-Extension",
+                "Tus-Max-Size",
+                "Upload-Length",
+                "Upload-Offset"
+        ));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(Duration.ofHours(1));
 

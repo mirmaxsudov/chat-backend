@@ -1,6 +1,7 @@
 package uz.mirmaxsudov.chatclonebackend.service.impl.user;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
 
@@ -33,6 +35,7 @@ public class UserServiceImpl implements UserService {
             cacheNames = CacheNames.USER_PROFILE_RESPONSE
     )
     public UserProfileResponse getProfile(UUID userId) {
+        log.debug("Loading user profile: userId={}", userId);
         User user = userRepository.findByIdAndDeletedFalse(userId)
                 .orElseThrow(() -> new CustomNotFoundException("User not found"));
 
@@ -59,12 +62,22 @@ public class UserServiceImpl implements UserService {
             int size
     ) {
         String normalizedUsername = normalizeUsername(username);
-        return userRepository.searchByUsername(
+        Page<PublicUserResponse> results = userRepository.searchByUsername(
                         normalizedUsername,
                         currentUserId,
                         PageRequest.of(page, size)
                 )
                 .map(this::toPublicUserResponse);
+
+        log.debug(
+                "User search completed: requesterId={}, page={}, size={}, resultCount={}, hasNext={}",
+                currentUserId,
+                page,
+                size,
+                results.getNumberOfElements(),
+                results.hasNext()
+        );
+        return results;
     }
 
     private String normalizeUsername(String username) {

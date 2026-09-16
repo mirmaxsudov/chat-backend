@@ -72,6 +72,7 @@ public class UserController {
                 .total((int) Math.min(users.getTotalElements(), Integer.MAX_VALUE))
                 .page(users.getNumber())
                 .size(users.getSize())
+                .hasPrev(users.hasPrevious())
                 .hasNext(users.hasNext())
                 .build());
     }

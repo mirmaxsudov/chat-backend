@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="APPLICATION_NAME"
+                    source="spring.application.name" defaultValue="chat"/>
+    <springProperty scope="context" name="LOG_DIR"
+                    source="logging.file.path" defaultValue="logs"/>
+    <springProperty scope="context" name="LOG_TIME_ZONE"
+                    source="app.logging.time-zone" defaultValue="Asia/Tashkent"/>
+    <springProperty scope="context" name="ROOT_LOG_LEVEL"
+                    source="logging.level.root" defaultValue="INFO"/>
+    <springProperty scope="context" name="APP_LOG_LEVEL"
+                    source="logging.level.uz.mirmaxsudov.chatclonebackend" defaultValue="INFO"/>
+
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX,${LOG_TIME_ZONE}} %-5level [%thread] %logger{40} requestId=%X{requestId:-none} userId=%X{userId:-anonymous} - %msg%n%throwable"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <springProfile name="!test">
+        <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>${LOG_DIR}/${APPLICATION_NAME}.log</file>
+            <append>true</append>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>${LOG_DIR}/archive/${APPLICATION_NAME}.%d{yyyy-MM-dd,${LOG_TIME_ZONE}}.%i.log.gz
+                </fileNamePattern>
+                <maxFileSize>50MB</maxFileSize>
+                <maxHistory>30</maxHistory>
+                <totalSizeCap>2GB</totalSizeCap>
+                <cleanHistoryOnStart>true</cleanHistoryOnStart>
+            </rollingPolicy>
+            <encoder>
+                <pattern>${LOG_PATTERN}</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <logger name="uz.mirmaxsudov.chatclonebackend" level="${APP_LOG_LEVEL}"/>
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="FILE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="test">
+        <logger name="uz.mirmaxsudov.chatclonebackend" level="${APP_LOG_LEVEL}"/>
+        <root level="${ROOT_LOG_LEVEL}">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+</configuration>
