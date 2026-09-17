@@ -1,4 +1,4 @@
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:21-jdk-jammy AS build
 
 WORKDIR /workspace
 
@@ -10,11 +10,11 @@ RUN ./mvnw -B -DskipTests dependency:go-offline
 COPY src src
 RUN ./mvnw -B -DskipTests package
 
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-RUN addgroup -S lms && adduser -S lms -G lms
+RUN groupadd --system lms && useradd --system --gid lms --home-dir /app --shell /usr/sbin/nologin lms
 RUN mkdir -p /app/logs && chown -R lms:lms /app/logs
 
 COPY --from=build /workspace/target/*.jar app.jar

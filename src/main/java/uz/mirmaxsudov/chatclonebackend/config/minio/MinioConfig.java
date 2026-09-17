@@ -8,7 +8,11 @@ import org.springframework.context.annotation.Configuration;
 
 @Configuration
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties({MinioProperties.class, TusProperties.class})
+@EnableConfigurationProperties({
+        MinioProperties.class,
+        TusProperties.class,
+        VideoThumbnailProperties.class
+})
 public class MinioConfig {
     @Bean
     public MinioClient minioClient(MinioProperties properties) {

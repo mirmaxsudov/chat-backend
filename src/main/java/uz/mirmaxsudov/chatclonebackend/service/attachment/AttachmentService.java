@@ -15,10 +15,12 @@ import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClien
 import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
+import uz.mirmaxsudov.chatclonebackend.storage.StorageObjectNotFoundException;
 
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -27,6 +29,7 @@ import java.util.UUID;
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class AttachmentService {
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
+    public static final String THUMBNAIL_STORAGE_KEY_METADATA = "thumbnailStorageKey";
     private final StorageService storageService;
 
     private final AttachmentRepository attachmentRepository;
@@ -142,6 +145,45 @@ public class AttachmentService {
                 range.partial(),
                 contentType,
                 attachment.getOriginalFileName()
+        );
+    }
+
+    public AttachmentClientResponse getVideoThumbnail(
+            UUID id,
+            String rangeHeader,
+            boolean includeBody
+    ) {
+        Attachment attachment = attachmentRepository.findByIdAndDeletedFalse(id)
+                .orElseThrow(() -> new CustomNotFoundException("Attachment not found with id: " + id));
+
+        String thumbnailStorageKey = Optional.ofNullable(attachment.getMetadata())
+                .map(metadata -> metadata.get(THUMBNAIL_STORAGE_KEY_METADATA))
+                .filter(value -> !value.isBlank())
+                .orElseThrow(() -> new CustomNotFoundException("Video thumbnail not found for attachment: " + id));
+
+        StatObjectResponse stat;
+        try {
+            stat = storageService.statObject(thumbnailStorageKey);
+        } catch (StorageObjectNotFoundException exception) {
+            throw new CustomNotFoundException("Video thumbnail is not ready for attachment: " + id);
+        }
+        ByteRange range = parseRange(rangeHeader, stat.size());
+
+        return new AttachmentClientResponse(
+                includeBody
+                        ? storageService.openObject(
+                        thumbnailStorageKey,
+                        range.start(),
+                        range.partial() ? range.length() : null
+                )
+                        : null,
+                stat.size(),
+                range.length(),
+                range.start(),
+                range.end(),
+                range.partial(),
+                "image/jpeg",
+                attachment.getOriginalFileName() + ".jpg"
         );
     }
 

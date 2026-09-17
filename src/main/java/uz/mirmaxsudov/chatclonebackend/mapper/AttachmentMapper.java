@@ -4,8 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.message.MessageAttachment;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.message.AttachmentMessageResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.message.MessageAttachmentResponse;
+import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
 import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentPublicURLResolver;
 
 import java.util.List;
@@ -30,8 +32,22 @@ public class AttachmentMapper {
                                 attachment.getContentType(),
                                 attachment.getSizeBytes(),
                                 attachmentPublicURLResolver.resolvePublicURL(attachment.getId()),
-                                attachment.getType()
+                                attachment.getType(),
+                                thumbnailURL(attachment)
                         )
         );
+    }
+
+    private String thumbnailURL(Attachment attachment) {
+        if (attachment.getType() == null || attachment.getMetadata() == null)
+            return null;
+
+        String thumbnailStorageKey = attachment.getMetadata()
+                .get(AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA);
+        return attachment.getType() == AttachmentType.VIDEO
+                && thumbnailStorageKey != null
+                && !thumbnailStorageKey.isBlank()
+                ? attachmentPublicURLResolver.resolveThumbnailURL(attachment.getId())
+                : null;
     }
 }

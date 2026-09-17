@@ -23,6 +23,14 @@ app:
     cors:
       allowed-origins: http://localhost:3000
 
+attachments:
+  video-thumbnail:
+    enabled: ${VIDEO_THUMBNAIL_ENABLED:true}
+    max-width: ${VIDEO_THUMBNAIL_MAX_WIDTH:640}
+    core-pool-size: ${VIDEO_THUMBNAIL_CORE_POOL_SIZE:1}
+    max-pool-size: ${VIDEO_THUMBNAIL_MAX_POOL_SIZE:2}
+    queue-capacity: ${VIDEO_THUMBNAIL_QUEUE_CAPACITY:20}
+
 springwolf:
   use-fqn: false
   docket:
