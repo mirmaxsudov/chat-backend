@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletRequest;
+import uz.mirmaxsudov.chatclonebackend.annotations.OpenAuth;
 import uz.mirmaxsudov.chatclonebackend.common.util.APIUtil;
 import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClientResponse;
 import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class AttachmentController {
     private final AttachmentService attachmentService;
 
+    @OpenAuth
     @RequestMapping(
             path = {
                     APIUtil.API_BASE_URL + "attachment/{id}",
