@@ -12,10 +12,13 @@ import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
+import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatMemberRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.DmLinkRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.SavedChatLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.DmLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.SavedChatLinkRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 
 import java.util.UUID;
@@ -49,6 +52,9 @@ class ChatApiIntegrationTest {
 
     @Autowired
     private SavedChatLinkRepository savedChatLinkRepository;
+
+    @Autowired
+    private AttachmentRepository attachmentRepository;
 
     private User currentUser;
     private User targetUser;
@@ -147,6 +153,59 @@ class ChatApiIntegrationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Chat not found"));
+    }
+
+    @Test
+    void messageAttachmentsAreOwnedOrderedAndReturnedInHistory() throws Exception {
+        UUID chatId = createDm(currentUser, targetUser.getUsername());
+        Attachment first = saveAttachment(currentUser, "first.png", "image/png", 100);
+        Attachment second = saveAttachment(currentUser, "second.pdf", "application/pdf", 200);
+
+        mockMvc.perform(post("/api/v1/chats/{chatId}/messages", chatId)
+                        .with(jwtFor(currentUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Files",
+                                  "attachments": [
+                                    {"id": "%s", "sortOrder": 1},
+                                    {"id": "%s", "sortOrder": 0}
+                                  ]
+                                }
+                                """.formatted(first.getId(), second.getId())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attachments.length()").value(2))
+                .andExpect(jsonPath("$.data.attachments[0].sortOrder").value(0))
+                .andExpect(jsonPath("$.data.attachments[0].attachment.name").value("second.pdf"))
+                .andExpect(jsonPath("$.data.attachments[1].sortOrder").value(1))
+                .andExpect(jsonPath("$.data.attachments[1].attachment.name").value("first.png"));
+
+        mockMvc.perform(get("/api/v1/chats/{chatId}/messages", chatId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages[0].attachments.length()").value(2))
+                .andExpect(jsonPath("$.data.messages[0].attachments[0].attachment.name")
+                        .value("second.pdf"));
+    }
+
+    @Test
+    void messageRejectsAttachmentOwnedByAnotherUser() throws Exception {
+        UUID chatId = createDm(currentUser, targetUser.getUsername());
+        Attachment foreignAttachment = saveAttachment(outsider, "private.txt", "text/plain", 50);
+
+        mockMvc.perform(post("/api/v1/chats/{chatId}/messages", chatId)
+                        .with(jwtFor(currentUser))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "text": "Not allowed",
+                                  "attachments": [
+                                    {"id": "%s", "sortOrder": 0}
+                                  ]
+                                }
+                                """.formatted(foreignAttachment.getId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("One or more attachments are invalid"));
     }
 
     @Test
@@ -263,6 +322,17 @@ class ChatApiIntegrationTest {
                 .firstname(firstname)
                 .lastname(lastname)
                 .passwordHash("not-used-in-this-test")
+                .build());
+    }
+
+    private Attachment saveAttachment(User owner, String name, String contentType, long sizeBytes) {
+        return attachmentRepository.save(Attachment.builder()
+                .storageKey("tests/" + UUID.randomUUID())
+                .originalFileName(name)
+                .contentType(contentType)
+                .type(AttachmentType.OTHERS)
+                .sizeBytes(sizeBytes)
+                .uploadedBy(owner)
                 .build());
     }
 }

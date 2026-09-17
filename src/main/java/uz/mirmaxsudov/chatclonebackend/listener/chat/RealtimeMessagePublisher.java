@@ -41,6 +41,7 @@ public class RealtimeMessagePublisher {
                     contentType = "application/json"
             )
     ))
+
     @StompAsyncOperationBinding
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void publish(MessageCreatedEvent event) {
@@ -69,7 +70,8 @@ public class RealtimeMessagePublisher {
                 event.senderId(),
                 event.text(),
                 event.createdAt(),
-                event.senderId().equals(recipientId)
+                event.senderId().equals(recipientId),
+                event.attachments()
         );
 
         return new RealtimeMessageEvent(

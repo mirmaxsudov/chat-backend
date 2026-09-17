@@ -10,6 +10,7 @@ import uz.mirmaxsudov.chatclonebackend.exceptions.AttachmentRangeNotSatisfiableE
 import uz.mirmaxsudov.chatclonebackend.exceptions.CustomNotFoundException;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClientResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
@@ -17,6 +18,7 @@ import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
 
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.UUID;
 
 @Slf4j
@@ -58,10 +60,49 @@ public class AttachmentService {
                 .storageKey(storageKey)
                 .originalFileName(originalFileName)
                 .contentType(contentType)
+                .type(resolveAttachmentType(contentType))
                 .sizeBytes(sizeBytes)
                 .uploadedBy(uploader)
                 .metadata(new HashMap<>(metadata))
                 .build());
+    }
+
+    public AttachmentType resolveAttachmentType(String contentType) {
+        if (contentType == null || contentType.isBlank())
+            return AttachmentType.OTHERS;
+
+        String normalized = contentType
+                .split(";", 2)[0]
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        if (normalized.startsWith("image/"))
+            return AttachmentType.IMAGE;
+        if (normalized.startsWith("video/"))
+            return AttachmentType.VIDEO;
+        if (normalized.startsWith("audio/"))
+            return AttachmentType.AUDIO;
+        if (normalized.equals("application/pdf"))
+            return AttachmentType.PDF;
+        if (isExcelContentType(normalized))
+            return AttachmentType.EXCEL;
+        if (isPowerPointContentType(normalized))
+            return AttachmentType.PPT;
+
+        return AttachmentType.OTHERS;
+    }
+
+    private boolean isExcelContentType(String contentType) {
+        return contentType.equals("text/csv")
+                || contentType.startsWith("application/vnd.ms-excel")
+                || contentType.startsWith("application/vnd.openxmlformats-officedocument.spreadsheetml")
+                || contentType.equals("application/vnd.oasis.opendocument.spreadsheet");
+    }
+
+    private boolean isPowerPointContentType(String contentType) {
+        return contentType.startsWith("application/vnd.ms-powerpoint")
+                || contentType.startsWith("application/vnd.openxmlformats-officedocument.presentationml")
+                || contentType.equals("application/vnd.oasis.opendocument.presentation");
     }
 
 
@@ -89,10 +130,10 @@ public class AttachmentService {
         return new AttachmentClientResponse(
                 includeBody
                         ? storageService.openObject(
-                                attachment.getStorageKey(),
-                                range.start(),
-                                range.partial() ? range.length() : null
-                        )
+                        attachment.getStorageKey(),
+                        range.start(),
+                        range.partial() ? range.length() : null
+                )
                         : null,
                 stat.size(),
                 range.length(),

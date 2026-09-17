@@ -1,4 +1,4 @@
-package uz.mirmaxsudov.chatclonebackend.repository.chat;
+package uz.mirmaxsudov.chatclonebackend.repository.chat.dm;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

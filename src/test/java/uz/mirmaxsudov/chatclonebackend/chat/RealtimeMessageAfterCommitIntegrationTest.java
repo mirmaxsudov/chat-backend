@@ -9,11 +9,13 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.support.TransactionTemplate;
 import uz.mirmaxsudov.chatclonebackend.listener.chat.RealtimeMessagePublisher;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
+import uz.mirmaxsudov.chatclonebackend.model.request.chat.SendMessageRequest;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.ChatResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 
 import java.util.UUID;
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -46,7 +48,11 @@ class RealtimeMessageAfterCommitIntegrationTest {
         clearInvocations(messagingTemplate);
 
         transactionTemplate.executeWithoutResult(status -> {
-            chatService.sendMessage(sender.getId(), chat.id(), "Committed message");
+            chatService.sendMessage(
+                    sender.getId(),
+                    chat.id(),
+                    new SendMessageRequest("Committed message", List.of())
+            );
             verify(messagingTemplate, never()).convertAndSendToUser(
                     any(String.class),
                     eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),

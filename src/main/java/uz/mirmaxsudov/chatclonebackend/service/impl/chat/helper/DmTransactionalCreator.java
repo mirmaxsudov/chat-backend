@@ -1,4 +1,4 @@
-package uz.mirmaxsudov.chatclonebackend.service.impl.chat;
+package uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -12,7 +12,7 @@ import uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType;
 import uz.mirmaxsudov.chatclonebackend.model.enums.chat.MemberRole;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatMemberRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.DmLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.DmLinkRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 
 import java.util.List;

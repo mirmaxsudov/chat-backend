@@ -11,6 +11,8 @@ import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
 import uz.mirmaxsudov.chatclonebackend.listener.chat.RealtimeMessagePublisher;
 import uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.RealtimeMessageEvent;
+import uz.mirmaxsudov.chatclonebackend.model.response.chat.message.AttachmentMessageResponse;
+import uz.mirmaxsudov.chatclonebackend.model.response.chat.message.MessageAttachmentResponse;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -57,6 +59,17 @@ class RealtimeMessagePublisherTest {
         assertThat(payloads).allSatisfy(payload -> {
             assertThat(payload.type()).isEqualTo("MESSAGE_CREATED");
             assertThat(payload.chatType()).isEqualTo(ChatType.DIRECT);
+            assertThat(payload.message().attachments()).containsExactly(
+                    new MessageAttachmentResponse(
+                            0,
+                            new AttachmentMessageResponse(
+                                    "photo.png",
+                                    "image/png",
+                                    123L,
+                                    "https://cdn.example.test/photo.png"
+                            )
+                    )
+            );
         });
     }
 
@@ -83,7 +96,16 @@ class RealtimeMessagePublisherTest {
                 senderId,
                 "Hello",
                 LocalDateTime.now(),
-                recipients
+                recipients,
+                List.of(new MessageAttachmentResponse(
+                        0,
+                        new AttachmentMessageResponse(
+                                "photo.png",
+                                "image/png",
+                                123L,
+                                "https://cdn.example.test/photo.png"
+                        )
+                ))
         );
     }
 }

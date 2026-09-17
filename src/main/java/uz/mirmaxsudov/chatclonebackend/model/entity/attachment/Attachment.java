@@ -1,15 +1,6 @@
 package uz.mirmaxsudov.chatclonebackend.model.entity.attachment;
 
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Index;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.MapKeyColumn;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -17,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.entity.base.BaseEntity;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -46,6 +38,10 @@ public class Attachment extends BaseEntity {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "uploaded_by_id", nullable = false)
     private User uploadedBy;
+
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    private AttachmentType type;
 
     @Builder.Default
     @ElementCollection(fetch = FetchType.LAZY)

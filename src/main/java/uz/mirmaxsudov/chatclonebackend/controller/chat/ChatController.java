@@ -12,17 +12,18 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import uz.mirmaxsudov.chatclonebackend.common.util.APIUtil;
+import uz.mirmaxsudov.chatclonebackend.common.util.responseUtil.ResponseSuccessBuilder;
 import uz.mirmaxsudov.chatclonebackend.model.request.chat.CreateDmRequest;
-import uz.mirmaxsudov.chatclonebackend.model.request.chat.SendMessageRequest;
 import uz.mirmaxsudov.chatclonebackend.model.response.ApiPaginateResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.ApiResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.ChatResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageHistoryResponse;
-import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageResponse;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 
 import java.util.List;
 import java.util.UUID;
+
+import static uz.mirmaxsudov.chatclonebackend.common.util.UserExtractor.userId;
 
 @Validated
 @RestController
@@ -37,7 +38,7 @@ public class ChatController {
             @Valid @RequestBody CreateDmRequest request
     ) {
         ChatResponse chat = chatService.createOrGetDm(userId(jwt), request.username());
-        return ResponseEntity.ok(success("Direct chat retrieved", chat));
+        return ResponseEntity.ok(ResponseSuccessBuilder.success("Direct chat retrieved", chat));
     }
 
     @PostMapping("/saved")
@@ -45,7 +46,7 @@ public class ChatController {
             @AuthenticationPrincipal Jwt jwt
     ) {
         ChatResponse chat = chatService.createOrGetSavedChat(userId(jwt));
-        return ResponseEntity.ok(success("Saved messages chat retrieved", chat));
+        return ResponseEntity.ok(ResponseSuccessBuilder.success("Saved messages chat retrieved", chat));
     }
 
     @GetMapping
@@ -77,55 +78,9 @@ public class ChatController {
             @AuthenticationPrincipal Jwt jwt,
             @PathVariable UUID chatId
     ) {
-        return ResponseEntity.ok(success(
+        return ResponseEntity.ok(ResponseSuccessBuilder.success(
                 "Chat retrieved",
                 chatService.getChat(userId(jwt), chatId)
         ));
-    }
-
-    @GetMapping("/{chatId}/messages")
-    public ResponseEntity<ApiResponse<MessageHistoryResponse>> getMessages(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID chatId,
-            @RequestParam(required = false) @Positive(message = "beforeSeq must be greater than zero")
-            Long beforeSeq,
-            @RequestParam(defaultValue = "50")
-            @Min(value = 1, message = "Size must be at least 1")
-            @Max(value = 100, message = "Size must not exceed 100")
-            int size
-    ) {
-        MessageHistoryResponse messages = chatService.getMessages(
-                userId(jwt),
-                chatId,
-                beforeSeq,
-                size
-        );
-        return ResponseEntity.ok(success("Messages retrieved", messages));
-    }
-
-    @PostMapping("/{chatId}/messages")
-    public ResponseEntity<ApiResponse<MessageResponse>> sendMessage(
-            @AuthenticationPrincipal Jwt jwt,
-            @PathVariable UUID chatId,
-            @Valid @RequestBody SendMessageRequest request
-    ) {
-        MessageResponse message = chatService.sendMessage(
-                userId(jwt),
-                chatId,
-                request.text()
-        );
-        return ResponseEntity.ok(success("Message sent", message));
-    }
-
-    private UUID userId(Jwt jwt) {
-        return UUID.fromString(jwt.getSubject());
-    }
-
-    private <T> ApiResponse<T> success(String message, T data) {
-        return ApiResponse.<T>builder()
-                .success(true)
-                .message(message)
-                .data(data)
-                .build();
     }
 }
