@@ -28,6 +28,12 @@ minio:
   bucket: ${secrets.minio.bucket}
   region: ${secrets.minio.region}
 
+tus:
+  stale-chunk-cleanup-enabled: true
+  stale-chunk-retention: 1d
+  stale-chunk-cleanup-interval: 1h
+  stale-chunk-cleanup-initial-delay: 1m
+
 app:
   seed:
     fake-users:

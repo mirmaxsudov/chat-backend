@@ -36,9 +36,9 @@ public class RequestCorrelationFilter extends OncePerRequestFilter {
     }
 
     private String resolveRequestId(String candidate) {
-        if (candidate != null && VALID_REQUEST_ID.matcher(candidate).matches()) {
+        if (candidate != null && VALID_REQUEST_ID.matcher(candidate).matches())
             return candidate;
-        }
+
         return UUID.randomUUID().toString();
     }
 }

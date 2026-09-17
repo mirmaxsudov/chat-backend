@@ -7,6 +7,7 @@ import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -14,8 +15,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class TusUploadStore {
     private final Map<String, TusUpload> uploads = new ConcurrentHashMap<>();
 
-    public TusUpload create(String id, String objectKey, long uploadLength, Map<String, String> metadata) {
-        TusUpload upload = new TusUpload(id, objectKey, uploadLength, metadata);
+    public TusUpload create(
+            String id,
+            String objectKey,
+            long uploadLength,
+            Map<String, String> metadata,
+            UUID uploaderId
+    ) {
+        TusUpload upload = new TusUpload(id, objectKey, uploadLength, metadata, uploaderId);
         uploads.put(id, upload);
         return upload;
     }
@@ -33,5 +40,13 @@ public class TusUploadStore {
 
     public void remove(String id) {
         uploads.remove(id);
+    }
+
+    public boolean remove(String id, TusUpload upload) {
+        return uploads.remove(id, upload);
+    }
+
+    public boolean contains(String id, TusUpload upload) {
+        return uploads.get(id) == upload;
     }
 }

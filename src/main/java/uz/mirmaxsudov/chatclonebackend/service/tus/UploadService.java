@@ -6,16 +6,19 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.tus.DownloadPayload;
 import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
 import uz.mirmaxsudov.chatclonebackend.model.tus.UploadChunk;
+import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
 import uz.mirmaxsudov.chatclonebackend.tus.TusProtocolException;
 import uz.mirmaxsudov.chatclonebackend.tus.TusUploadStore;
 
 import java.io.InputStream;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -26,11 +29,17 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class UploadService {
+    private static final int MAX_METADATA_KEY_LENGTH = 128;
+    private static final int MAX_METADATA_VALUE_LENGTH = 2048;
+    private static final int MAX_FILE_NAME_LENGTH = 512;
+    private static final int MAX_CONTENT_TYPE_LENGTH = 255;
+
     private final TusUploadStore tusUploadStore;
     private final StorageService storageService;
     private final TusProperties tusProperties;
+    private final AttachmentService attachmentService;
 
-    public TusUpload createUpload(long uploadLength, Map<String, String> metadata) {
+    public TusUpload createUpload(long uploadLength, Map<String, String> metadata, UUID uploaderId) {
         if (uploadLength <= 0)
             throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Upload-Length must be greater than zero");
 
@@ -38,23 +47,39 @@ public class UploadService {
             throw new TusProtocolException(HttpStatus.CONTENT_TOO_LARGE,
                     "Upload-Length exceeds max size: " + tusProperties.getMaxUploadSizeBytes());
 
+        Map<String, String> normalizedMetadata = normalizeAndValidateMetadata(metadata);
         String id = UUID.randomUUID().toString();
         String objectKey = "uploads/" + id;
-        TusUpload upload = tusUploadStore.create(id, objectKey, uploadLength, metadata == null ? Map.of() : metadata);
+        TusUpload upload = tusUploadStore.create(
+                id,
+                objectKey,
+                uploadLength,
+                normalizedMetadata,
+                uploaderId
+        );
 
         log.info("Created TUS upload id={}, length={}", id, uploadLength);
 
         return upload;
     }
 
-    public long appendChunk(String id, long uploadOffset, long chunkSize, InputStream inputStream) {
+    public long appendChunk(
+            String id,
+            UUID uploaderId,
+            long uploadOffset,
+            long chunkSize,
+            InputStream inputStream
+    ) {
         if (chunkSize <= 0)
             throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Chunk size must be greater than zero");
 
-        TusUpload upload = tusUploadStore.getRequired(id);
+        TusUpload upload = getOwnedUpload(id, uploaderId);
 
         upload.lock();
         try {
+            if (!tusUploadStore.contains(id, upload))
+                throw new TusProtocolException(HttpStatus.NOT_FOUND, "Upload not found: " + id);
+
             if (upload.isCompleted())
                 throw new TusProtocolException(HttpStatus.CONFLICT, "Upload is already completed");
 
@@ -85,15 +110,21 @@ public class UploadService {
         }
     }
 
-    public TusUpload getUpload(String id) {
-        return tusUploadStore.getRequired(id);
+    public TusUpload getUpload(String id, UUID uploaderId) {
+        return getOwnedUpload(id, uploaderId);
     }
 
-    public void deleteUpload(String id) {
-        TusUpload upload = tusUploadStore.getRequired(id);
+    public void deleteUpload(String id, UUID uploaderId) {
+        TusUpload upload = getOwnedUpload(id, uploaderId);
 
         upload.lock();
         try {
+            if (upload.isCompleted())
+                throw new TusProtocolException(
+                        HttpStatus.CONFLICT,
+                        "A completed attachment cannot be deleted through the TUS upload endpoint"
+                );
+
             List<String> chunkObjectKeys = upload.getChunks().stream()
                     .map(UploadChunk::objectKey)
                     .toList();
@@ -109,8 +140,8 @@ public class UploadService {
         }
     }
 
-    public DownloadPayload openDownload(String id, String rangeHeader) {
-        TusUpload upload = tusUploadStore.getRequired(id);
+    public DownloadPayload openDownload(String id, UUID uploaderId, String rangeHeader) {
+        TusUpload upload = getOwnedUpload(id, uploaderId);
 
         if (!upload.isCompleted())
             throw new TusProtocolException(HttpStatus.CONFLICT, "Upload is not complete yet");
@@ -149,15 +180,56 @@ public class UploadService {
                 .toList();
 
         storageService.composeObject(upload.getObjectKey(), orderedChunks);
+        Attachment attachment = attachmentService.createCompletedAttachment(
+                upload.getObjectKey(),
+                upload.getUploadLength(),
+                upload.getMetadata(),
+                upload.getUploaderId()
+        );
         upload.addChunk(finalChunk);
         upload.incrementOffset(finalChunk.size());
-        upload.markCompleted();
+        upload.markCompleted(attachment.getId());
 
         if (tusProperties.isChunkCleanupOnComplete()) {
             storageService.removeObjects(orderedChunks);
         }
 
-        log.info("Upload completed id={} objectKey={}", upload.getId(), upload.getObjectKey());
+        log.info(
+                "Upload completed id={} attachmentId={} objectKey={}",
+                upload.getId(),
+                attachment.getId(),
+                upload.getObjectKey()
+        );
+    }
+
+    private TusUpload getOwnedUpload(String id, UUID uploaderId) {
+        TusUpload upload = tusUploadStore.getRequired(id);
+        if (!upload.getUploaderId().equals(uploaderId))
+            throw new TusProtocolException(HttpStatus.NOT_FOUND, "Upload not found: " + id);
+        return upload;
+    }
+
+    private Map<String, String> normalizeAndValidateMetadata(Map<String, String> metadata) {
+        Map<String, String> normalized = new HashMap<>(metadata == null ? Map.of() : metadata);
+        if (!normalized.containsKey("contentType") && normalized.containsKey("filetype"))
+            normalized.put("contentType", normalized.get("filetype"));
+
+        normalized.forEach((key, value) -> {
+            if (key.length() > MAX_METADATA_KEY_LENGTH)
+                throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Upload metadata key is too long: " + key);
+            if (value.length() > MAX_METADATA_VALUE_LENGTH)
+                throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Upload metadata value is too long for key: " + key);
+        });
+
+        validateMetadataLength(normalized, "filename", MAX_FILE_NAME_LENGTH);
+        validateMetadataLength(normalized, "contentType", MAX_CONTENT_TYPE_LENGTH);
+        return Map.copyOf(normalized);
+    }
+
+    private void validateMetadataLength(Map<String, String> metadata, String key, int maxLength) {
+        String value = metadata.get(key);
+        if (value != null && value.length() > maxLength)
+            throw new TusProtocolException(HttpStatus.BAD_REQUEST, key + " exceeds " + maxLength + " characters");
     }
 
     private ByteRange parseRange(String rangeHeader, long totalSize) {
