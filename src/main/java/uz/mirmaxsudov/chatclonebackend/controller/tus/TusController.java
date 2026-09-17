@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.*;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.tus.DownloadPayload;
@@ -16,6 +18,7 @@ import uz.mirmaxsudov.chatclonebackend.tus.TusProtocolException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
@@ -30,6 +33,7 @@ public class TusController {
     private static final String HEADER_TUS_EXTENSION = "Tus-Extension";
     private static final String HEADER_TUS_VERSION = "Tus-Version";
     private static final String HEADER_TUS_MAX_SIZE = "Tus-Max-Size";
+    private static final String HEADER_ATTACHMENT_ID = "Upload-Attachment-Id";
 
     private final UploadService uploadService;
     private final TusProperties tusProperties;
@@ -47,6 +51,7 @@ public class TusController {
             @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable,
             @RequestHeader(value = HEADER_UPLOAD_LENGTH, required = false) Long uploadLength,
             @RequestHeader(value = HEADER_UPLOAD_METADATA, required = false) String uploadMetadata,
+            @AuthenticationPrincipal Jwt jwt,
             HttpServletRequest request
     ) {
         validateTusResumable(tusResumable);
@@ -55,7 +60,7 @@ public class TusController {
             throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Upload-Length header is required");
 
         Map<String, String> metadata = TusMetadataParser.parse(uploadMetadata);
-        TusUpload upload = uploadService.createUpload(uploadLength, metadata);
+        TusUpload upload = uploadService.createUpload(uploadLength, metadata, userId(jwt));
 
         String location = request.getRequestURL().toString();
         if (!location.endsWith("/"))
@@ -76,6 +81,7 @@ public class TusController {
             @PathVariable String id,
             @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable,
             @RequestHeader(value = HEADER_UPLOAD_OFFSET, required = false) Long uploadOffset,
+            @AuthenticationPrincipal Jwt jwt,
             HttpServletRequest request
     ) throws Exception {
         validateTusResumable(tusResumable);
@@ -88,10 +94,17 @@ public class TusController {
         if (chunkSize <= 0)
             throw new TusProtocolException(HttpStatus.BAD_REQUEST, "Content-Length must be greater than zero for PATCH");
 
-        long newOffset = uploadService.appendChunk(id, uploadOffset, chunkSize, request.getInputStream());
+        long newOffset = uploadService.appendChunk(
+                id,
+                userId(jwt),
+                uploadOffset,
+                chunkSize,
+                request.getInputStream()
+        );
 
         HttpHeaders headers = baseTusHeaders();
         headers.add(HEADER_UPLOAD_OFFSET, String.valueOf(newOffset));
+        addAttachmentId(headers, uploadService.getUpload(id, userId(jwt)));
 
         return ResponseEntity.noContent().headers(headers).build();
     }
@@ -99,15 +112,17 @@ public class TusController {
     @RequestMapping(path = "/{id}", method = RequestMethod.HEAD)
     public ResponseEntity<Void> headUpload(
             @PathVariable String id,
-            @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable
+            @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable,
+            @AuthenticationPrincipal Jwt jwt
     ) {
         validateTusResumable(tusResumable);
 
-        TusUpload upload = uploadService.getUpload(id);
+        TusUpload upload = uploadService.getUpload(id, userId(jwt));
         HttpHeaders headers = baseTusHeaders();
         headers.add(HEADER_UPLOAD_OFFSET, String.valueOf(upload.getOffset()));
         headers.add(HEADER_UPLOAD_LENGTH, String.valueOf(upload.getUploadLength()));
         headers.add(HttpHeaders.CACHE_CONTROL, "no-store");
+        addAttachmentId(headers, upload);
 
         return ResponseEntity.ok().headers(headers).build();
     }
@@ -115,19 +130,21 @@ public class TusController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUpload(
             @PathVariable String id,
-            @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable
+            @RequestHeader(value = HEADER_TUS_RESUMABLE, required = false) String tusResumable,
+            @AuthenticationPrincipal Jwt jwt
     ) {
         validateTusResumable(tusResumable);
-        uploadService.deleteUpload(id);
+        uploadService.deleteUpload(id, userId(jwt));
         return ResponseEntity.noContent().headers(baseTusHeaders()).build();
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<InputStreamResource> download(
             @PathVariable String id,
+            @AuthenticationPrincipal Jwt jwt,
             @RequestHeader(value = HttpHeaders.RANGE, required = false) String range
     ) {
-        DownloadPayload payload = uploadService.openDownload(id, range);
+        DownloadPayload payload = uploadService.openDownload(id, userId(jwt), range);
 
         HttpHeaders headers = new HttpHeaders();
         headers.add(HttpHeaders.ACCEPT_RANGES, "bytes");
@@ -169,5 +186,14 @@ public class TusController {
         headers.add(HEADER_TUS_RESUMABLE, TUS_VERSION);
         headers.add(HEADER_TUS_VERSION, TUS_VERSION);
         return headers;
+    }
+
+    private void addAttachmentId(HttpHeaders headers, TusUpload upload) {
+        if (upload.getAttachmentId() != null)
+            headers.add(HEADER_ATTACHMENT_ID, upload.getAttachmentId().toString());
+    }
+
+    private UUID userId(Jwt jwt) {
+        return UUID.fromString(jwt.getSubject());
     }
 }

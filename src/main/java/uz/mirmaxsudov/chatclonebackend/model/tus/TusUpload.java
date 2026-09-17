@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Getter
@@ -14,19 +15,22 @@ public class TusUpload {
     private final String objectKey;
     private final long uploadLength;
     private final Map<String, String> metadata;
+    private final UUID uploaderId;
     private final List<UploadChunk> chunks = new ArrayList<>();
     private final ReentrantLock lock = new ReentrantLock();
 
     private long offset;
     private boolean completed;
+    private UUID attachmentId;
     private final Instant createdAt;
     private Instant updatedAt;
 
-    public TusUpload(String id, String objectKey, long uploadLength, Map<String, String> metadata) {
+    public TusUpload(String id, String objectKey, long uploadLength, Map<String, String> metadata, UUID uploaderId) {
         this.id = id;
         this.objectKey = objectKey;
         this.uploadLength = uploadLength;
         this.metadata = metadata;
+        this.uploaderId = uploaderId;
         this.offset = 0L;
         this.completed = false;
         this.createdAt = Instant.now();
@@ -51,8 +55,9 @@ public class TusUpload {
         updatedAt = Instant.now();
     }
 
-    public void markCompleted() {
+    public void markCompleted(UUID attachmentId) {
         completed = true;
+        this.attachmentId = attachmentId;
         updatedAt = Instant.now();
     }
 }

@@ -79,6 +79,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ApiErrorResponse(exception.getMessage(), HttpStatus.NOT_FOUND, LocalDateTime.now(), 404);
     }
 
+    @ExceptionHandler(AttachmentRangeNotSatisfiableException.class)
+    public ResponseEntity<ApiErrorResponse> handleAttachmentRangeNotSatisfiable(
+            AttachmentRangeNotSatisfiableException exception
+    ) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add(HttpHeaders.CONTENT_RANGE, "bytes */" + exception.getTotalSize());
+
+        ApiErrorResponse body = new ApiErrorResponse(
+                exception.getMessage(),
+                HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE,
+                LocalDateTime.now(),
+                HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE.value()
+        );
+        return new ResponseEntity<>(
+                body,
+                headers,
+                HttpStatus.REQUESTED_RANGE_NOT_SATISFIABLE
+        );
+    }
+
     @ResponseStatus(HttpStatus.CONFLICT)
     @ExceptionHandler(CustomConflictException.class)
     public ApiErrorResponse handleAlreadyExistException(CustomConflictException exception) {

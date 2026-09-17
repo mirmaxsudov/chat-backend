@@ -2,6 +2,7 @@ package uz.mirmaxsudov.chatclonebackend.storage;
 
 import io.minio.*;
 import io.minio.errors.ErrorResponseException;
+import io.minio.messages.Item;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -249,6 +250,27 @@ public class StorageService {
             return true;
         } catch (StorageObjectNotFoundException ex) {
             return false;
+        }
+    }
+
+    public List<StoredObject> listObjects(String prefix) {
+        try {
+            List<StoredObject> objects = new ArrayList<>();
+            Iterable<Result<Item>> results = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(minioProperties.getBucket())
+                            .prefix(prefix)
+                            .recursive(true)
+                            .build()
+            );
+
+            for (Result<Item> result : results) {
+                Item item = result.get();
+                objects.add(new StoredObject(item.objectName(), item.lastModified().toInstant()));
+            }
+            return objects;
+        } catch (Exception e) {
+            throw new StorageException("Failed to list objects with prefix: " + prefix, e);
         }
     }
 

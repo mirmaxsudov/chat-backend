@@ -6,15 +6,15 @@ import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.entity.base.BaseEntity;
 
 @Entity
-@Table(name = "saved_chat_links", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_saved_chat_link_user", columnNames = "user_id"),
-        @UniqueConstraint(name = "uk_saved_chat_link_chat", columnNames = "chat_id")
-})
 @Getter
 @Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Table(name = "saved_chat_links", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_saved_chat_link_user", columnNames = "user_id"),
+        @UniqueConstraint(name = "uk_saved_chat_link_chat", columnNames = "chat_id")
+})
 public class SavedChatLink extends BaseEntity {
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "chat_id", nullable = false, unique = true)

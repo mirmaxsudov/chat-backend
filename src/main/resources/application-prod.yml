@@ -24,3 +24,9 @@ server:
     include-message: never
     include-binding-errors: never
     include-stacktrace: never
+
+tus:
+  stale-chunk-cleanup-enabled: true
+  stale-chunk-retention: 1d
+  stale-chunk-cleanup-interval: 1h
+  stale-chunk-cleanup-initial-delay: 1m
