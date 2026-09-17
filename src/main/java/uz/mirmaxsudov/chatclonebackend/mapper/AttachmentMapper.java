@@ -29,7 +29,8 @@ public class AttachmentMapper {
                                 attachment.getOriginalFileName(),
                                 attachment.getContentType(),
                                 attachment.getSizeBytes(),
-                                attachmentPublicURLResolver.resolvePublicURL(attachment.getId())
+                                attachmentPublicURLResolver.resolvePublicURL(attachment.getId()),
+                                attachment.getType()
                         )
         );
     }

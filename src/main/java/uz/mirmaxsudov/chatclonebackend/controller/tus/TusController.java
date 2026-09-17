@@ -8,6 +8,7 @@ import org.springframework.http.*;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import uz.mirmaxsudov.chatclonebackend.common.util.APIUtil;
 import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.tus.DownloadPayload;
 import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
@@ -22,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/files")
+@RequestMapping(APIUtil.API_BASE_URL + "files")
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class TusController {
     private static final String TUS_VERSION = "1.0.0";
