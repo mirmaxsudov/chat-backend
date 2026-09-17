@@ -6,6 +6,9 @@ import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.entity.base.BaseEntity;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.Chat;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Entity
 @Table(name = "messages", uniqueConstraints = {
         @UniqueConstraint(name = "uk_message_chat_seq", columnNames = {"chat_id", "seq"})

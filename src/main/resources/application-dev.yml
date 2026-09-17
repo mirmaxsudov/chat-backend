@@ -34,6 +34,9 @@ tus:
   stale-chunk-cleanup-interval: 1h
   stale-chunk-cleanup-initial-delay: 1m
 
+attachments:
+  public-url-base: ${secrets.attachments.public-url-base}
+
 app:
   seed:
     fake-users:

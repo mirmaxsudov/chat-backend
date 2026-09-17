@@ -1,6 +1,7 @@
 package uz.mirmaxsudov.chatclonebackend.service.base.chat;
 
 import org.springframework.data.domain.Page;
+import uz.mirmaxsudov.chatclonebackend.model.request.chat.SendMessageRequest;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.ChatResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageHistoryResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageResponse;
@@ -18,5 +19,5 @@ public interface ChatService {
 
     MessageHistoryResponse getMessages(UUID currentUserId, UUID chatId, Long beforeSeq, int size);
 
-    MessageResponse sendMessage(UUID currentUserId, UUID chatId, String text);
+    MessageResponse sendMessage(UUID currentUserId, UUID chatId, SendMessageRequest request);
 }

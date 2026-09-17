@@ -3,8 +3,12 @@ package uz.mirmaxsudov.chatclonebackend.service.attachment;
 import io.minio.StatObjectResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import uz.mirmaxsudov.chatclonebackend.exceptions.AttachmentRangeNotSatisfiableException;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
+import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClientResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
@@ -13,6 +17,7 @@ import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -32,6 +38,7 @@ class AttachmentServiceTest {
 
     private StorageService storageService;
     private AttachmentRepository attachmentRepository;
+    private UserRepository userRepository;
     private AttachmentService attachmentService;
     private StatObjectResponse stat;
 
@@ -39,13 +46,14 @@ class AttachmentServiceTest {
     void setUp() {
         storageService = mock(StorageService.class);
         attachmentRepository = mock(AttachmentRepository.class);
-        UserRepository userRepository = mock(UserRepository.class);
+        userRepository = mock(UserRepository.class);
         attachmentService = new AttachmentService(storageService, attachmentRepository, userRepository);
 
         Attachment attachment = Attachment.builder()
                 .storageKey(STORAGE_KEY)
                 .originalFileName("video.mp4")
                 .contentType("video/mp4")
+                .type(AttachmentType.VIDEO)
                 .sizeBytes(1_000)
                 .build();
         stat = mock(StatObjectResponse.class);
@@ -137,5 +145,53 @@ class AttachmentServiceTest {
 
         assertEquals(1_000, exception.getTotalSize());
         verify(storageService, never()).openObject(STORAGE_KEY, 1_000, null);
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "image/jpeg, IMAGE",
+            "video/mp4, VIDEO",
+            "audio/mpeg, AUDIO",
+            "application/pdf, PDF",
+            "application/vnd.ms-excel, EXCEL",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, EXCEL",
+            "text/csv, EXCEL",
+            "application/vnd.ms-powerpoint, PPT",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation, PPT",
+            "application/zip, OTHERS",
+            "' IMAGE/PNG; charset=UTF-8 ', IMAGE"
+    })
+    void resolvesAttachmentTypeFromContentType(String contentType, AttachmentType expected) {
+        assertEquals(expected, attachmentService.resolveAttachmentType(contentType));
+    }
+
+    @Test
+    void resolvesMissingContentTypeAsOthers() {
+        assertEquals(AttachmentType.OTHERS, attachmentService.resolveAttachmentType(null));
+        assertEquals(AttachmentType.OTHERS, attachmentService.resolveAttachmentType("  "));
+    }
+
+    @Test
+    void setsResolvedTypeWhenCreatingCompletedAttachment() {
+        UUID uploaderId = UUID.randomUUID();
+        User uploader = mock(User.class);
+        when(uploader.getId()).thenReturn(uploaderId);
+        when(userRepository.getReferenceById(uploaderId)).thenReturn(uploader);
+        when(attachmentRepository.findByStorageKey("uploads/report.pdf"))
+                .thenReturn(Optional.empty());
+        when(attachmentRepository.saveAndFlush(any(Attachment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Attachment created = attachmentService.createCompletedAttachment(
+                "uploads/report.pdf",
+                512,
+                Map.of(
+                        "filename", "report.pdf",
+                        "contentType", "application/pdf"
+                ),
+                uploaderId
+        );
+
+        assertEquals(AttachmentType.PDF, created.getType());
     }
 }

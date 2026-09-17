@@ -8,27 +8,33 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
 import uz.mirmaxsudov.chatclonebackend.exceptions.CustomBadRequestException;
 import uz.mirmaxsudov.chatclonebackend.exceptions.CustomNotFoundException;
-import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
+import uz.mirmaxsudov.chatclonebackend.mapper.AttachmentMapper;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.Chat;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.ChatMember;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.DmLink;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.SavedChatLink;
 import uz.mirmaxsudov.chatclonebackend.model.entity.chat.message.Message;
+import uz.mirmaxsudov.chatclonebackend.model.entity.chat.message.MessageAttachment;
 import uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType;
+import uz.mirmaxsudov.chatclonebackend.model.request.chat.SendMessageRequest;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.ChatResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageHistoryResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageResponse;
 import uz.mirmaxsudov.chatclonebackend.model.response.user.PublicUserResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatMemberRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.DmLinkRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.MessageRepository;
-import uz.mirmaxsudov.chatclonebackend.repository.chat.SavedChatLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.DmLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.SavedChatLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.message.MessageRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
+import uz.mirmaxsudov.chatclonebackend.service.base.chat.MessageAttachmentService;
+import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.DmTransactionalCreator;
+import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.SavedChatTransactionalCreator;
 
 import java.util.Comparator;
 import java.util.List;
@@ -52,6 +58,10 @@ public class ChatServiceImpl implements ChatService {
     private final DmTransactionalCreator dmTransactionalCreator;
     private final SavedChatTransactionalCreator savedChatTransactionalCreator;
     private final ApplicationEventPublisher eventPublisher;
+    private final MessageAttachmentService messageAttachmentService;
+
+    // Mappers
+    private final AttachmentMapper attachmentMapper;
 
     @Override
     public ChatResponse createOrGetDm(UUID currentUserId, String username) {
@@ -59,9 +69,8 @@ public class ChatServiceImpl implements ChatService {
         User targetUser = userRepository.findByUsernameIgnoreCaseAndDeletedFalse(normalizeUsername(username))
                 .orElseThrow(() -> new CustomNotFoundException("User not found"));
 
-        if (currentUser.getId().equals(targetUser.getId())) {
+        if (currentUser.getId().equals(targetUser.getId()))
             throw new CustomBadRequestException("A direct chat cannot be created with yourself");
-        }
 
         UserPair pair = canonicalPair(currentUser, targetUser);
         DmLink existing = dmLinkRepository.findActiveByUsers(pair.first().getId(), pair.second().getId())
@@ -157,6 +166,9 @@ public class ChatServiceImpl implements ChatService {
         Map<UUID, Message> latestMessages = messageRepository.findLatestByChatIds(chatIds)
                 .stream()
                 .collect(Collectors.toMap(message -> message.getChat().getId(), Function.identity()));
+        Map<UUID, List<MessageAttachment>> attachmentsByMessageId = attachmentsByMessageId(
+                latestMessages.values()
+        );
 
         Page<ChatResponse> results = chats.map(chat -> toChatResponse(
                 chat,
@@ -164,7 +176,8 @@ public class ChatServiceImpl implements ChatService {
                         ? currentUser
                         : requirePeer(peers.get(chat.getId())),
                 latestMessages.get(chat.getId()),
-                currentUserId
+                currentUserId,
+                attachmentsByMessageId
         ));
 
         log.debug(
@@ -189,12 +202,17 @@ public class ChatServiceImpl implements ChatService {
                 .map(ChatMember::getUser)
                 .findFirst()
                 .orElseThrow(() -> new CustomNotFoundException("Chat not found"));
+
         Message latestMessage = messageRepository.findLatestByChatIds(List.of(chatId))
                 .stream()
                 .findFirst()
                 .orElse(null);
 
-        return toChatResponse(chat, peer, latestMessage, currentUserId);
+        Map<UUID, List<MessageAttachment>> attachmentsByMessageId = latestMessage == null
+                ? Map.of()
+                : attachmentsByMessageId(List.of(latestMessage));
+
+        return toChatResponse(chat, peer, latestMessage, currentUserId, attachmentsByMessageId);
     }
 
     @Override
@@ -207,9 +225,10 @@ public class ChatServiceImpl implements ChatService {
     ) {
         findAccessibleChat(chatId, currentUserId);
         long cursor = beforeSeq == null ? FIRST_PAGE_CURSOR : beforeSeq;
-        if (cursor < 1) {
+
+        if (cursor < 1)
             throw new CustomBadRequestException("beforeSeq must be greater than zero");
-        }
+
 
         var messages = messageRepository.findByChatIdAndDeletedFalseAndSeqLessThanOrderBySeqDesc(
                 chatId,
@@ -217,8 +236,15 @@ public class ChatServiceImpl implements ChatService {
                 PageRequest.of(0, size)
         );
 
+        Map<UUID, List<MessageAttachment>> attachmentsByMessageId = attachmentsByMessageId(
+                messages.getContent()
+        );
         List<MessageResponse> results = messages.getContent().stream()
-                .map(message -> toMessageResponse(message, currentUserId))
+                .map(message -> toMessageResponse(
+                        message,
+                        currentUserId,
+                        attachmentsByMessageId.getOrDefault(message.getId(), List.of())
+                ))
                 .toList();
 
         Long nextCursor = messages.hasNext() && !results.isEmpty()
@@ -238,7 +264,7 @@ public class ChatServiceImpl implements ChatService {
 
     @Override
     @Transactional
-    public MessageResponse sendMessage(UUID currentUserId, UUID chatId, String text) {
+    public MessageResponse sendMessage(UUID currentUserId, UUID chatId, SendMessageRequest request) {
         Chat chat = chatRepository.findByIdForUpdate(chatId)
                 .filter(candidate -> chatMemberRepository
                         .existsByChatIdAndUserIdAndDeletedFalse(candidate.getId(), currentUserId))
@@ -251,12 +277,16 @@ public class ChatServiceImpl implements ChatService {
         long nextSequence = chat.getLastMessageSeq() + 1;
         chat.setLastMessageSeq(nextSequence);
 
+        // We create message
         Message message = messageRepository.saveAndFlush(Message.builder()
                 .chat(chat)
                 .seq(nextSequence)
                 .sender(sender)
-                .text(text.strip())
+                .text(request.text().strip())
                 .build());
+
+        // Now, we will create attachments for the message
+        List<MessageAttachment> attachments = messageAttachmentService.createAttachments(message, request.attachments(), currentUserId);
 
         List<UUID> recipientIds = chatMemberRepository.findActiveUserIdsByChatId(chatId);
 
@@ -268,19 +298,21 @@ public class ChatServiceImpl implements ChatService {
                 sender.getId(),
                 message.getText(),
                 message.getCreatedAt(),
-                recipientIds
+                recipientIds,
+                attachmentMapper.toMessageAttachmentResponses(attachments)
         ));
 
         log.info(
-                "Message created: messageId={}, chatId={}, seq={}, senderId={}, recipientCount={}",
+                "Message created: messageId={}, chatId={}, seq={}, senderId={}, recipientCount={}, attachments-count={}",
                 message.getId(),
                 chatId,
                 message.getSeq(),
                 currentUserId,
-                recipientIds.size()
+                recipientIds.size(),
+                attachments.size()
         );
 
-        return toMessageResponse(message, currentUserId);
+        return toMessageResponse(message, currentUserId, attachments);
     }
 
     private Chat findAccessibleChat(UUID chatId, UUID userId) {
@@ -312,25 +344,48 @@ public class ChatServiceImpl implements ChatService {
         return peer;
     }
 
-    private ChatResponse toChatResponse(Chat chat, User peer, Message latestMessage, UUID currentUserId) {
+    private ChatResponse toChatResponse(
+            Chat chat,
+            User peer,
+            Message latestMessage,
+            UUID currentUserId,
+            Map<UUID, List<MessageAttachment>> attachmentsByMessageId
+    ) {
         return new ChatResponse(
                 chat.getId(),
                 chat.getType(),
                 toPublicUserResponse(peer),
-                latestMessage == null ? null : toMessageResponse(latestMessage, currentUserId),
+                latestMessage == null ? null : toMessageResponse(
+                        latestMessage,
+                        currentUserId,
+                        attachmentsByMessageId.getOrDefault(latestMessage.getId(), List.of())
+                ),
                 chat.getCreatedAt(),
                 chat.getUpdatedAt()
         );
     }
 
-    private MessageResponse toMessageResponse(Message message, UUID currentUserId) {
+    private MessageResponse toMessageResponse(
+            Message message,
+            UUID currentUserId,
+            List<MessageAttachment> attachments
+    ) {
         return new MessageResponse(
                 message.getId(),
                 message.getSeq(),
                 message.getSender().getId(),
                 message.getText(),
                 message.getCreatedAt(),
-                message.getSender().getId().equals(currentUserId)
+                message.getSender().getId().equals(currentUserId),
+                attachmentMapper.toMessageAttachmentResponses(attachments)
+        );
+    }
+
+    private Map<UUID, List<MessageAttachment>> attachmentsByMessageId(
+            java.util.Collection<Message> messages
+    ) {
+        return messageAttachmentService.getAttachmentsByMessageIds(
+                messages.stream().map(Message::getId).toList()
         );
     }
 
