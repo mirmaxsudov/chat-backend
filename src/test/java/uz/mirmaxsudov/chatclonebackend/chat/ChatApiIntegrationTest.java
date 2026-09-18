@@ -95,6 +95,8 @@ class ChatApiIntegrationTest {
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.results[0].id").value(firstChatId.toString()))
                 .andExpect(jsonPath("$.results[0].peer.username").value("Target.User"))
+                .andExpect(jsonPath("$.results[0].peerPresence.userId").value(targetUser.getId().toString()))
+                .andExpect(jsonPath("$.results[0].peerPresence.status").value("OFFLINE"))
                 .andExpect(jsonPath("$.results[0].lastMessage").isEmpty());
     }
 
@@ -264,6 +266,7 @@ class ChatApiIntegrationTest {
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.results[0].type").value("SAVED"))
                 .andExpect(jsonPath("$.results[0].peer.username").value(currentUser.getUsername()))
+                .andExpect(jsonPath("$.results[0].peerPresence").isEmpty())
                 .andExpect(jsonPath("$.results[0].lastMessage.text").value("Remember this"));
 
         mockMvc.perform(get("/api/v1/chats/{chatId}/messages", firstSavedChatId)
