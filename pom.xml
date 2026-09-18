@@ -25,6 +25,8 @@
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <openfeign.querydsl.version>7.5</openfeign.querydsl.version>
         <springwolf.version>2.6.0</springwolf.version>
+        <javacv.version>1.5.14</javacv.version>
+        <ffmpeg.version>8.1.2-${javacv.version}</ffmpeg.version>
     </properties>
 
     <dependencies>
@@ -87,6 +89,40 @@
         </dependency>
 
         <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacv</artifactId>
+            <version>${javacv.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>*</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>javacpp</artifactId>
+            <version>${javacv.version}</version>
+            <classifier>${os.detected.classifier}</classifier>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.bytedeco</groupId>
+            <artifactId>ffmpeg</artifactId>
+            <version>${ffmpeg.version}</version>
+            <classifier>${os.detected.classifier}</classifier>
+            <scope>runtime</scope>
+        </dependency>
+
+        <dependency>
             <groupId>io.github.springwolf</groupId>
             <artifactId>springwolf-stomp</artifactId>
             <version>${springwolf.version}</version>
@@ -141,6 +177,14 @@
     </dependencies>
 
     <build>
+        <extensions>
+            <extension>
+                <groupId>kr.motd.maven</groupId>
+                <artifactId>os-maven-plugin</artifactId>
+                <version>1.7.1</version>
+            </extension>
+        </extensions>
+
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>

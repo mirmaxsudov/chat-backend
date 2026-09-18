@@ -6,6 +6,7 @@ import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
 import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
+import uz.mirmaxsudov.chatclonebackend.service.attachment.VideoThumbnailJobScheduler;
 import uz.mirmaxsudov.chatclonebackend.service.tus.UploadService;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageException;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
@@ -31,6 +32,7 @@ import static org.mockito.Mockito.when;
 class UploadServiceTest {
     private StorageService storageService;
     private AttachmentService attachmentService;
+    private VideoThumbnailJobScheduler videoThumbnailJobScheduler;
     private UploadService uploadService;
     private UUID uploaderId;
 
@@ -38,13 +40,20 @@ class UploadServiceTest {
     void setUp() {
         storageService = mock(StorageService.class);
         attachmentService = mock(AttachmentService.class);
+        videoThumbnailJobScheduler = mock(VideoThumbnailJobScheduler.class);
         uploaderId = UUID.randomUUID();
 
         TusProperties properties = new TusProperties();
         properties.setMaxUploadSizeBytes(100);
         properties.setChunkCleanupOnComplete(true);
 
-        uploadService = new UploadService(new TusUploadStore(), storageService, properties, attachmentService);
+        uploadService = new UploadService(
+                new TusUploadStore(),
+                storageService,
+                properties,
+                attachmentService,
+                videoThumbnailJobScheduler
+        );
         when(attachmentService.createCompletedAttachment(any(), anyLong(), any(), eq(uploaderId)))
                 .thenAnswer(invocation -> {
                     Attachment attachment = new Attachment();
@@ -105,6 +114,40 @@ class UploadServiceTest {
     }
 
     @Test
+    void generatesThumbnailAndAddsItToCompletedVideoMetadata() {
+        TusUpload upload = uploadService.createUpload(
+                3,
+                Map.of("filename", "clip.mp4", "contentType", "video/mp4"),
+                uploaderId
+        );
+        String thumbnailStorageKey = "thumbnails/" + upload.getId() + ".jpg";
+        when(videoThumbnailJobScheduler.submit(
+                upload.getObjectKey(),
+                upload.getId(),
+                thumbnailStorageKey
+        )).thenReturn(true);
+
+        uploadService.appendChunk(
+                upload.getId(),
+                uploaderId,
+                0,
+                3,
+                new ByteArrayInputStream(new byte[]{1, 2, 3})
+        );
+
+        verify(attachmentService).createCompletedAttachment(
+                upload.getObjectKey(),
+                3,
+                Map.of(
+                        "filename", "clip.mp4",
+                        "contentType", "video/mp4",
+                        AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA, thumbnailStorageKey
+                ),
+                uploaderId
+        );
+    }
+
+    @Test
     void hidesAnUploadFromAnotherUser() {
         TusUpload upload = uploadService.createUpload(5, Map.of(), uploaderId);
 
@@ -119,6 +162,20 @@ class UploadServiceTest {
     @Test
     void rejectsUploadsAboveConfiguredMaximum() {
         assertThrows(TusProtocolException.class, () -> uploadService.createUpload(101, Map.of(), uploaderId));
+    }
+
+    @Test
+    void rejectsClientSuppliedThumbnailStorageMetadata() {
+        TusProtocolException exception = assertThrows(
+                TusProtocolException.class,
+                () -> uploadService.createUpload(
+                        3,
+                        Map.of(AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA, "uploads/private-object"),
+                        uploaderId
+                )
+        );
+
+        assertEquals(400, exception.getStatus().value());
     }
 
     @Test

@@ -45,6 +45,29 @@ public class AttachmentController {
         boolean includeBody = !HttpMethod.HEAD.matches(request.getMethod());
         AttachmentClientResponse attachment = attachmentService.getClientAttachment(id, range, includeBody);
 
+        return toResponse(attachment);
+    }
+
+    @OpenAuth
+    @RequestMapping(
+            path = {
+                    APIUtil.API_BASE_URL + "attachment/{id}/thumbnail",
+                    APIUtil.API_BASE_URL + "attachments/{id}/thumbnail"
+            },
+            method = {RequestMethod.GET, RequestMethod.HEAD}
+    )
+    public ResponseEntity<InputStreamResource>getVideoThumbnail (
+            @PathVariable("id") UUID id,
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String range,
+            HttpServletRequest request
+    ) {
+        boolean includeBody = !HttpMethod.HEAD.matches(request.getMethod());
+        AttachmentClientResponse thumbnail = attachmentService.getVideoThumbnail(id, range, includeBody);
+
+        return toResponse(thumbnail);
+    }
+
+    private ResponseEntity<InputStreamResource> toResponse(AttachmentClientResponse attachment) {
         HttpHeaders headers = new HttpHeaders();
 
         headers.add(HttpHeaders.ACCEPT_RANGES, "bytes");

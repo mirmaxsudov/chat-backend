@@ -17,4 +17,8 @@ public class AttachmentPublicURLResolver {
     public String resolvePublicURL(UUID attachmentId) {
         return publicURLBase + "/" + attachmentId;
     }
+
+    public String resolveThumbnailURL(UUID attachmentId) {
+        return resolvePublicURL(attachmentId) + "/thumbnail";
+    }
 }

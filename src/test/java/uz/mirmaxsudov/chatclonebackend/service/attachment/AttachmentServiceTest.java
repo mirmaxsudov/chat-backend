@@ -133,6 +133,40 @@ class AttachmentServiceTest {
     }
 
     @Test
+    void opensGeneratedVideoThumbnail() {
+        String thumbnailStorageKey = "thumbnails/video.jpg";
+        Attachment attachment = Attachment.builder()
+                .storageKey(STORAGE_KEY)
+                .originalFileName("video.mp4")
+                .contentType("video/mp4")
+                .type(AttachmentType.VIDEO)
+                .sizeBytes(1_000)
+                .metadata(Map.of(
+                        AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA,
+                        thumbnailStorageKey
+                ))
+                .build();
+        StatObjectResponse thumbnailStat = mock(StatObjectResponse.class);
+        InputStream stream = new ByteArrayInputStream(new byte[0]);
+        when(attachmentRepository.findByIdAndDeletedFalse(ATTACHMENT_ID))
+                .thenReturn(Optional.of(attachment));
+        when(storageService.statObject(thumbnailStorageKey)).thenReturn(thumbnailStat);
+        when(thumbnailStat.size()).thenReturn(100L);
+        when(storageService.openObject(thumbnailStorageKey, 0, null)).thenReturn(stream);
+
+        AttachmentClientResponse response = attachmentService.getVideoThumbnail(
+                ATTACHMENT_ID,
+                null,
+                true
+        );
+
+        assertEquals("image/jpeg", response.contentType());
+        assertEquals("video.mp4.jpg", response.fileName());
+        assertEquals(100, response.contentLength());
+        assertSame(stream, response.stream());
+    }
+
+    @Test
     void rejectsUnsatisfiableRanges() {
         AttachmentRangeNotSatisfiableException exception = assertThrows(
                 AttachmentRangeNotSatisfiableException.class,

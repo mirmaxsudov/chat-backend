@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
 import uz.mirmaxsudov.chatclonebackend.listener.chat.RealtimeMessagePublisher;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 import uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.RealtimeMessageEvent;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.message.AttachmentMessageResponse;
@@ -66,7 +67,9 @@ class RealtimeMessagePublisherTest {
                                     "photo.png",
                                     "image/png",
                                     123L,
-                                    "https://cdn.example.test/photo.png"
+                                    "https://cdn.example.test/photo.png",
+                                    AttachmentType.IMAGE,
+                                    null
                             )
                     )
             );
@@ -103,7 +106,9 @@ class RealtimeMessagePublisherTest {
                                 "photo.png",
                                 "image/png",
                                 123L,
-                                "https://cdn.example.test/photo.png"
+                                "https://cdn.example.test/photo.png",
+                                AttachmentType.IMAGE,
+                                null
                         )
                 ))
         );

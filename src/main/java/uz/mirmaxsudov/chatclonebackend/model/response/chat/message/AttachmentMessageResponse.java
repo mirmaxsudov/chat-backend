@@ -7,6 +7,7 @@ public record AttachmentMessageResponse(
         String contentType,
         long sizeBytes,
         String publicURL,
-        AttachmentType type
+        AttachmentType type,
+        String thumbnailURL
 ) {
 }

@@ -83,4 +83,32 @@ class AttachmentControllerTest {
         assertNull(response.getBody());
         verify(attachmentService).getClientAttachment(ATTACHMENT_ID, null, false);
     }
+
+    @Test
+    void returnsVideoThumbnailAsInlineImage() {
+        AttachmentClientResponse thumbnail = new AttachmentClientResponse(
+                new ByteArrayInputStream(new byte[0]),
+                100,
+                100,
+                0,
+                99,
+                false,
+                "image/jpeg",
+                "video.mp4.jpg"
+        );
+        when(attachmentService.getVideoThumbnail(ATTACHMENT_ID, null, true))
+                .thenReturn(thumbnail);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
+        ResponseEntity<InputStreamResource> response = controller.getVideoThumbnail(
+                ATTACHMENT_ID,
+                null,
+                request
+        );
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("image/jpeg", response.getHeaders().getContentType().toString());
+        assertTrue(response.hasBody());
+        verify(attachmentService).getVideoThumbnail(ATTACHMENT_ID, null, true);
+    }
 }
