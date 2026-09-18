@@ -35,6 +35,7 @@ import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.MessageAttachmentService;
 import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.DmTransactionalCreator;
 import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.SavedChatTransactionalCreator;
+import uz.mirmaxsudov.chatclonebackend.service.presence.PresenceService;
 
 import java.util.Comparator;
 import java.util.List;
@@ -59,6 +60,7 @@ public class ChatServiceImpl implements ChatService {
     private final SavedChatTransactionalCreator savedChatTransactionalCreator;
     private final ApplicationEventPublisher eventPublisher;
     private final MessageAttachmentService messageAttachmentService;
+    private final PresenceService presenceService;
 
     // Mappers
     private final AttachmentMapper attachmentMapper;
@@ -355,6 +357,7 @@ public class ChatServiceImpl implements ChatService {
                 chat.getId(),
                 chat.getType(),
                 toPublicUserResponse(peer),
+                chat.getType() == ChatType.DIRECT ? presenceService.getPresence(peer) : null,
                 latestMessage == null ? null : toMessageResponse(
                         latestMessage,
                         currentUserId,

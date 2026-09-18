@@ -14,6 +14,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import uz.mirmaxsudov.chatclonebackend.model.entity.base.BaseEntity;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -33,6 +34,9 @@ public class User extends BaseEntity {
 
     private String firstname;
     private String lastname;
+
+    @Column(name = "last_seen_at")
+    private Instant lastSeenAt;
 
     @Column(nullable = false)
     private String passwordHash;

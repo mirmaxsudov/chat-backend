@@ -17,11 +17,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 
 import java.util.List;
+import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
 public class WebSocketJwtChannelInterceptor implements ChannelInterceptor {
     public static final String MESSAGE_QUEUE_DESTINATION = "/user/queue/messages";
+    public static final String PRESENCE_QUEUE_DESTINATION = "/user/queue/presence";
+    private static final Set<String> ALLOWED_SUBSCRIPTION_DESTINATIONS = Set.of(
+            MESSAGE_QUEUE_DESTINATION,
+            PRESENCE_QUEUE_DESTINATION
+    );
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
@@ -57,8 +63,8 @@ public class WebSocketJwtChannelInterceptor implements ChannelInterceptor {
         }
 
         if (command == StompCommand.SUBSCRIBE
-                && !MESSAGE_QUEUE_DESTINATION.equals(accessor.getDestination())) {
-            throw new AccessDeniedException("Only the private message queue can be subscribed to");
+                && !ALLOWED_SUBSCRIPTION_DESTINATIONS.contains(accessor.getDestination())) {
+            throw new AccessDeniedException("Only private message and presence queues can be subscribed to");
         }
 
         return message;

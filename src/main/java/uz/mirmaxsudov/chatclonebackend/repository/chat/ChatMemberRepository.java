@@ -26,4 +26,19 @@ public interface ChatMemberRepository extends JpaRepository<ChatMember, UUID> {
               and cm.user.deleted = false
             """)
     List<UUID> findActiveUserIdsByChatId(@Param("chatId") UUID chatId);
+
+    @Query("""
+            select distinct peer.user.id
+            from ChatMember member, ChatMember peer
+            where member.chat.id = peer.chat.id
+              and member.user.id = :userId
+              and peer.user.id <> :userId
+              and member.chat.type = uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType.DIRECT
+              and member.deleted = false
+              and peer.deleted = false
+              and member.chat.deleted = false
+              and member.user.deleted = false
+              and peer.user.deleted = false
+            """)
+    List<UUID> findActiveDirectPeerIds(@Param("userId") UUID userId);
 }

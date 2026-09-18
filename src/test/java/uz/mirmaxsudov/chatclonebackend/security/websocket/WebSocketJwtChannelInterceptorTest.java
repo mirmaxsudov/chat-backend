@@ -79,9 +79,15 @@ class WebSocketJwtChannelInterceptorTest {
     @Test
     void authenticatedClientCanOnlySubscribeToPrivateMessageQueue() {
         JwtAuthenticationToken authentication = authentication(jwt());
-        Message<byte[]> allowed = message(
+        Message<byte[]> allowedMessages = message(
                 StompCommand.SUBSCRIBE,
                 WebSocketJwtChannelInterceptor.MESSAGE_QUEUE_DESTINATION,
+                null,
+                authentication
+        );
+        Message<byte[]> allowedPresence = message(
+                StompCommand.SUBSCRIBE,
+                WebSocketJwtChannelInterceptor.PRESENCE_QUEUE_DESTINATION,
                 null,
                 authentication
         );
@@ -92,10 +98,11 @@ class WebSocketJwtChannelInterceptorTest {
                 authentication
         );
 
-        assertThat(interceptor.preSend(allowed, ignoredChannel())).isSameAs(allowed);
+        assertThat(interceptor.preSend(allowedMessages, ignoredChannel())).isSameAs(allowedMessages);
+        assertThat(interceptor.preSend(allowedPresence, ignoredChannel())).isSameAs(allowedPresence);
         assertThatThrownBy(() -> interceptor.preSend(forbidden, ignoredChannel()))
                 .isInstanceOf(AccessDeniedException.class)
-                .hasMessage("Only the private message queue can be subscribed to");
+                .hasMessage("Only private message and presence queues can be subscribed to");
     }
 
     @Test
