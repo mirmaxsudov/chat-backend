@@ -11,6 +11,7 @@ import uz.mirmaxsudov.chatclonebackend.exceptions.CustomNotFoundException;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.PreviewStatus;
 import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClientResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
@@ -20,7 +21,6 @@ import uz.mirmaxsudov.chatclonebackend.storage.StorageObjectNotFoundException;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -29,7 +29,6 @@ import java.util.UUID;
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class AttachmentService {
     private static final String DEFAULT_CONTENT_TYPE = "application/octet-stream";
-    public static final String THUMBNAIL_STORAGE_KEY_METADATA = "thumbnailStorageKey";
     private final StorageService storageService;
 
     private final AttachmentRepository attachmentRepository;
@@ -55,6 +54,7 @@ public class AttachmentService {
         User uploader = userRepository.getReferenceById(uploaderId);
         String originalFileName = valueOrDefault(metadata, "filename", storageKey.substring(storageKey.lastIndexOf('/') + 1));
         String contentType = valueOrDefault(metadata, "contentType", DEFAULT_CONTENT_TYPE);
+        AttachmentType type = resolveAttachmentType(contentType);
 
         log.info("Creating attachment with storageKey: {}, originalFileName: {}, contentType: {}, sizeBytes: {}, uploadedBy: {}",
                 storageKey, originalFileName, contentType, sizeBytes, uploader.getId());
@@ -63,7 +63,8 @@ public class AttachmentService {
                 .storageKey(storageKey)
                 .originalFileName(originalFileName)
                 .contentType(contentType)
-                .type(resolveAttachmentType(contentType))
+                .type(type)
+                .previewStatus(isPreviewable(type) ? PreviewStatus.PENDING : PreviewStatus.NOT_APPLICABLE)
                 .sizeBytes(sizeBytes)
                 .uploadedBy(uploader)
                 .metadata(new HashMap<>(metadata))
@@ -148,7 +149,7 @@ public class AttachmentService {
         );
     }
 
-    public AttachmentClientResponse getVideoThumbnail(
+    public AttachmentClientResponse getPreview(
             UUID id,
             String rangeHeader,
             boolean includeBody
@@ -156,23 +157,24 @@ public class AttachmentService {
         Attachment attachment = attachmentRepository.findByIdAndDeletedFalse(id)
                 .orElseThrow(() -> new CustomNotFoundException("Attachment not found with id: " + id));
 
-        String thumbnailStorageKey = Optional.ofNullable(attachment.getMetadata())
-                .map(metadata -> metadata.get(THUMBNAIL_STORAGE_KEY_METADATA))
-                .filter(value -> !value.isBlank())
-                .orElseThrow(() -> new CustomNotFoundException("Video thumbnail not found for attachment: " + id));
+        if (attachment.getPreviewStatus() != PreviewStatus.READY
+                || attachment.getPreviewStorageKey() == null
+                || attachment.getPreviewStorageKey().isBlank()) {
+            throw new CustomNotFoundException("Media preview is not ready for attachment: " + id);
+        }
 
         StatObjectResponse stat;
         try {
-            stat = storageService.statObject(thumbnailStorageKey);
+            stat = storageService.statObject(attachment.getPreviewStorageKey());
         } catch (StorageObjectNotFoundException exception) {
-            throw new CustomNotFoundException("Video thumbnail is not ready for attachment: " + id);
+            throw new CustomNotFoundException("Media preview is not ready for attachment: " + id);
         }
         ByteRange range = parseRange(rangeHeader, stat.size());
 
         return new AttachmentClientResponse(
                 includeBody
                         ? storageService.openObject(
-                        thumbnailStorageKey,
+                        attachment.getPreviewStorageKey(),
                         range.start(),
                         range.partial() ? range.length() : null
                 )
@@ -182,9 +184,21 @@ public class AttachmentService {
                 range.start(),
                 range.end(),
                 range.partial(),
-                "image/jpeg",
-                attachment.getOriginalFileName() + ".jpg"
+                attachment.getPreviewContentType(),
+                attachment.getOriginalFileName() + previewExtension(attachment.getPreviewContentType())
         );
+    }
+
+    public AttachmentClientResponse getVideoThumbnail(UUID id, String rangeHeader, boolean includeBody) {
+        return getPreview(id, rangeHeader, includeBody);
+    }
+
+    private boolean isPreviewable(AttachmentType type) {
+        return type == AttachmentType.IMAGE || type == AttachmentType.VIDEO;
+    }
+
+    private String previewExtension(String contentType) {
+        return "image/png".equalsIgnoreCase(contentType) ? ".png" : ".jpg";
     }
 
     private ByteRange parseRange(String rangeHeader, long totalSize) {

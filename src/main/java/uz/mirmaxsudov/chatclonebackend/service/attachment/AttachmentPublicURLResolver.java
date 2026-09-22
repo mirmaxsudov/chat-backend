@@ -19,6 +19,10 @@ public class AttachmentPublicURLResolver {
     }
 
     public String resolveThumbnailURL(UUID attachmentId) {
-        return resolvePublicURL(attachmentId) + "/thumbnail";
+        return resolvePreviewURL(attachmentId);
+    }
+
+    public String resolvePreviewURL(UUID attachmentId) {
+        return resolvePublicURL(attachmentId) + "/preview";
     }
 }

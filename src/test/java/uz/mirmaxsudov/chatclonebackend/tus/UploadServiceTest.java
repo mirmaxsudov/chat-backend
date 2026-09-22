@@ -4,9 +4,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.PreviewStatus;
 import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
 import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
-import uz.mirmaxsudov.chatclonebackend.service.attachment.VideoThumbnailJobScheduler;
+import uz.mirmaxsudov.chatclonebackend.service.attachment.MediaPreviewJobScheduler;
 import uz.mirmaxsudov.chatclonebackend.service.tus.UploadService;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageException;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
@@ -32,7 +33,7 @@ import static org.mockito.Mockito.when;
 class UploadServiceTest {
     private StorageService storageService;
     private AttachmentService attachmentService;
-    private VideoThumbnailJobScheduler videoThumbnailJobScheduler;
+    private MediaPreviewJobScheduler mediaPreviewJobScheduler;
     private UploadService uploadService;
     private UUID uploaderId;
 
@@ -40,7 +41,7 @@ class UploadServiceTest {
     void setUp() {
         storageService = mock(StorageService.class);
         attachmentService = mock(AttachmentService.class);
-        videoThumbnailJobScheduler = mock(VideoThumbnailJobScheduler.class);
+        mediaPreviewJobScheduler = mock(MediaPreviewJobScheduler.class);
         uploaderId = UUID.randomUUID();
 
         TusProperties properties = new TusProperties();
@@ -52,12 +53,20 @@ class UploadServiceTest {
                 storageService,
                 properties,
                 attachmentService,
-                videoThumbnailJobScheduler
+                mediaPreviewJobScheduler
         );
         when(attachmentService.createCompletedAttachment(any(), anyLong(), any(), eq(uploaderId)))
                 .thenAnswer(invocation -> {
                     Attachment attachment = new Attachment();
                     attachment.setId(UUID.randomUUID());
+                    Map<?, ?> metadata = invocation.getArgument(2);
+                    Object rawContentType = metadata.get("contentType");
+                    String contentType = rawContentType instanceof String value
+                            ? value
+                            : "application/octet-stream";
+                    attachment.setPreviewStatus(contentType.startsWith("image/") || contentType.startsWith("video/")
+                            ? PreviewStatus.PENDING
+                            : PreviewStatus.NOT_APPLICABLE);
                     return attachment;
                 });
     }
@@ -114,19 +123,12 @@ class UploadServiceTest {
     }
 
     @Test
-    void generatesThumbnailAndAddsItToCompletedVideoMetadata() {
+    void schedulesPreviewAfterCompletedVideoAttachmentIsPersisted() {
         TusUpload upload = uploadService.createUpload(
                 3,
                 Map.of("filename", "clip.mp4", "contentType", "video/mp4"),
                 uploaderId
         );
-        String thumbnailStorageKey = "thumbnails/" + upload.getId() + ".jpg";
-        when(videoThumbnailJobScheduler.submit(
-                upload.getObjectKey(),
-                upload.getId(),
-                thumbnailStorageKey
-        )).thenReturn(true);
-
         uploadService.appendChunk(
                 upload.getId(),
                 uploaderId,
@@ -140,11 +142,11 @@ class UploadServiceTest {
                 3,
                 Map.of(
                         "filename", "clip.mp4",
-                        "contentType", "video/mp4",
-                        AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA, thumbnailStorageKey
+                        "contentType", "video/mp4"
                 ),
                 uploaderId
         );
+        verify(mediaPreviewJobScheduler).submit(upload.getAttachmentId());
     }
 
     @Test
@@ -165,17 +167,22 @@ class UploadServiceTest {
     }
 
     @Test
-    void rejectsClientSuppliedThumbnailStorageMetadata() {
-        TusProtocolException exception = assertThrows(
-                TusProtocolException.class,
-                () -> uploadService.createUpload(
-                        3,
-                        Map.of(AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA, "uploads/private-object"),
-                        uploaderId
-                )
+    void doesNotSchedulePreviewForNonMediaAttachment() {
+        TusUpload upload = uploadService.createUpload(
+                3,
+                Map.of("filename", "notes.txt", "contentType", "text/plain"),
+                uploaderId
         );
 
-        assertEquals(400, exception.getStatus().value());
+        uploadService.appendChunk(
+                upload.getId(),
+                uploaderId,
+                0,
+                3,
+                new ByteArrayInputStream(new byte[]{1, 2, 3})
+        );
+
+        verify(mediaPreviewJobScheduler, never()).submit(any());
     }
 
     @Test

@@ -96,11 +96,11 @@ class AttachmentControllerTest {
                 "image/jpeg",
                 "video.mp4.jpg"
         );
-        when(attachmentService.getVideoThumbnail(ATTACHMENT_ID, null, true))
+        when(attachmentService.getPreview(ATTACHMENT_ID, null, true))
                 .thenReturn(thumbnail);
 
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/");
-        ResponseEntity<InputStreamResource> response = controller.getVideoThumbnail(
+        ResponseEntity<InputStreamResource> response = controller.getPreview(
                 ATTACHMENT_ID,
                 null,
                 request
@@ -109,6 +109,7 @@ class AttachmentControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("image/jpeg", response.getHeaders().getContentType().toString());
         assertTrue(response.hasBody());
-        verify(attachmentService).getVideoThumbnail(ATTACHMENT_ID, null, true);
+        assertEquals("public, max-age=31536000, immutable", response.getHeaders().getCacheControl());
+        verify(attachmentService).getPreview(ATTACHMENT_ID, null, true);
     }
 }
