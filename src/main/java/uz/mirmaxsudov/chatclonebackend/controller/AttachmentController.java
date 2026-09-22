@@ -51,27 +51,46 @@ public class AttachmentController {
     @OpenAuth
     @RequestMapping(
             path = {
+                    APIUtil.API_BASE_URL + "attachment/{id}/preview",
+                    APIUtil.API_BASE_URL + "attachments/{id}/preview",
                     APIUtil.API_BASE_URL + "attachment/{id}/thumbnail",
                     APIUtil.API_BASE_URL + "attachments/{id}/thumbnail"
             },
             method = {RequestMethod.GET, RequestMethod.HEAD}
     )
-    public ResponseEntity<InputStreamResource>getVideoThumbnail (
+    public ResponseEntity<InputStreamResource> getPreview(
             @PathVariable("id") UUID id,
             @RequestHeader(value = HttpHeaders.RANGE, required = false) String range,
             HttpServletRequest request
     ) {
         boolean includeBody = !HttpMethod.HEAD.matches(request.getMethod());
-        AttachmentClientResponse thumbnail = attachmentService.getVideoThumbnail(id, range, includeBody);
+        AttachmentClientResponse thumbnail = attachmentService.getPreview(id, range, includeBody);
 
-        return toResponse(thumbnail);
+        return toResponse(thumbnail, true);
+    }
+
+    public ResponseEntity<InputStreamResource> getVideoThumbnail(
+            UUID id,
+            String range,
+            HttpServletRequest request
+    ) {
+        return getPreview(id, range, request);
     }
 
     private ResponseEntity<InputStreamResource> toResponse(AttachmentClientResponse attachment) {
+        return toResponse(attachment, false);
+    }
+
+    private ResponseEntity<InputStreamResource> toResponse(
+            AttachmentClientResponse attachment,
+            boolean immutable
+    ) {
         HttpHeaders headers = new HttpHeaders();
 
         headers.add(HttpHeaders.ACCEPT_RANGES, "bytes");
         headers.add("X-Content-Type-Options", "nosniff");
+        if (immutable)
+            headers.setCacheControl("public, max-age=31536000, immutable");
 
         if (attachment.partial())
             headers.add(

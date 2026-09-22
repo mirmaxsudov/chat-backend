@@ -8,6 +8,17 @@ public record AttachmentMessageResponse(
         long sizeBytes,
         String publicURL,
         AttachmentType type,
-        String thumbnailURL
+        String thumbnailURL,
+        AttachmentPreviewResponse preview
 ) {
+    public AttachmentMessageResponse(
+            String name,
+            String contentType,
+            long sizeBytes,
+            String publicURL,
+            AttachmentType type,
+            String thumbnailURL
+    ) {
+        this(name, contentType, sizeBytes, publicURL, type, thumbnailURL, null);
+    }
 }

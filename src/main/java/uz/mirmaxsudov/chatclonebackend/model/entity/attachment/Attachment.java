@@ -9,7 +9,9 @@ import lombok.Setter;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.entity.base.BaseEntity;
 import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.PreviewStatus;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,6 +44,29 @@ public class Attachment extends BaseEntity {
     @Column(nullable = false)
     @Enumerated(EnumType.STRING)
     private AttachmentType type;
+
+    @Builder.Default
+    @Column(length = 24)
+    @Enumerated(EnumType.STRING)
+    private PreviewStatus previewStatus = PreviewStatus.NOT_APPLICABLE;
+
+    @Column(length = 1024)
+    private String previewStorageKey;
+
+    @Column(length = 255)
+    private String previewContentType;
+
+    private Long previewSizeBytes;
+    private Integer previewWidth;
+    private Integer previewHeight;
+
+    @Column(length = 512)
+    private String previewError;
+
+    @Builder.Default
+    private Integer previewAttempts = 0;
+
+    private Instant previewUpdatedAt;
 
     @Builder.Default
     @ElementCollection(fetch = FetchType.LAZY)

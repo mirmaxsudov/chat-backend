@@ -9,16 +9,16 @@ import java.util.concurrent.Executor;
 
 @Configuration
 @ConditionalOnProperty(prefix = "minio", name = "enabled", havingValue = "true", matchIfMissing = true)
-public class VideoThumbnailJobConfig {
-    public static final String VIDEO_THUMBNAIL_EXECUTOR = "videoThumbnailExecutor";
+public class MediaPreviewJobConfig {
+    public static final String MEDIA_PREVIEW_EXECUTOR = "mediaPreviewExecutor";
 
-    @Bean(name = VIDEO_THUMBNAIL_EXECUTOR)
-    public Executor videoThumbnailExecutor(VideoThumbnailProperties properties) {
+    @Bean(name = MEDIA_PREVIEW_EXECUTOR)
+    public Executor mediaPreviewExecutor(MediaPreviewProperties properties) {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(properties.getCorePoolSize());
         executor.setMaxPoolSize(properties.getMaxPoolSize());
         executor.setQueueCapacity(properties.getQueueCapacity());
-        executor.setThreadNamePrefix("video-thumbnail-");
+        executor.setThreadNamePrefix("media-preview-");
         executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.initialize();
         return executor;

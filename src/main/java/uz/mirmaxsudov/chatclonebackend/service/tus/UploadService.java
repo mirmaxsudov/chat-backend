@@ -7,12 +7,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.PreviewStatus;
 import uz.mirmaxsudov.chatclonebackend.config.minio.TusProperties;
 import uz.mirmaxsudov.chatclonebackend.model.tus.DownloadPayload;
 import uz.mirmaxsudov.chatclonebackend.model.tus.TusUpload;
 import uz.mirmaxsudov.chatclonebackend.model.tus.UploadChunk;
 import uz.mirmaxsudov.chatclonebackend.service.attachment.AttachmentService;
-import uz.mirmaxsudov.chatclonebackend.service.attachment.VideoThumbnailJobScheduler;
+import uz.mirmaxsudov.chatclonebackend.service.attachment.MediaPreviewJobScheduler;
 import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
 import uz.mirmaxsudov.chatclonebackend.tus.TusProtocolException;
 import uz.mirmaxsudov.chatclonebackend.tus.TusUploadStore;
@@ -39,7 +40,7 @@ public class UploadService {
     private final StorageService storageService;
     private final TusProperties tusProperties;
     private final AttachmentService attachmentService;
-    private final VideoThumbnailJobScheduler videoThumbnailJobScheduler;
+    private final MediaPreviewJobScheduler mediaPreviewJobScheduler;
 
     public TusUpload createUpload(long uploadLength, Map<String, String> metadata, UUID uploaderId) {
         if (uploadLength <= 0)
@@ -182,28 +183,14 @@ public class UploadService {
                 .toList();
 
         storageService.composeObject(upload.getObjectKey(), orderedChunks);
-        Map<String, String> attachmentMetadata = new HashMap<>(upload.getMetadata());
-
-        if (isVideo(attachmentMetadata.get("contentType"))) {
-            String thumbnailStorageKey = "thumbnails/" + upload.getId() + ".jpg";
-            if (videoThumbnailJobScheduler.submit(
-                    upload.getObjectKey(),
-                    upload.getId(),
-                    thumbnailStorageKey
-            )) {
-                attachmentMetadata.put(
-                        AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA,
-                        thumbnailStorageKey
-                );
-            }
-        }
-
         Attachment attachment = attachmentService.createCompletedAttachment(
                 upload.getObjectKey(),
                 upload.getUploadLength(),
-                Map.copyOf(attachmentMetadata),
+                upload.getMetadata(),
                 upload.getUploaderId()
         );
+        if (attachment.getPreviewStatus() == PreviewStatus.PENDING)
+            mediaPreviewJobScheduler.submit(attachment.getId());
         upload.addChunk(finalChunk);
         upload.incrementOffset(finalChunk.size());
         upload.markCompleted(attachment.getId());
@@ -220,11 +207,6 @@ public class UploadService {
         );
     }
 
-    private boolean isVideo(String contentType) {
-        return contentType != null
-                && contentType.split(";", 2)[0].trim().toLowerCase(java.util.Locale.ROOT).startsWith("video/");
-    }
-
     private TusUpload getOwnedUpload(String id, UUID uploaderId) {
         TusUpload upload = tusUploadStore.getRequired(id);
         if (!upload.getUploaderId().equals(uploaderId))
@@ -234,11 +216,6 @@ public class UploadService {
 
     private Map<String, String> normalizeAndValidateMetadata(Map<String, String> metadata) {
         Map<String, String> normalized = new HashMap<>(metadata == null ? Map.of() : metadata);
-        if (normalized.containsKey(AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA))
-            throw new TusProtocolException(
-                    HttpStatus.BAD_REQUEST,
-                    "Upload metadata key is reserved: " + AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA
-            );
         if (!normalized.containsKey("contentType") && normalized.containsKey("filetype"))
             normalized.put("contentType", normalized.get("filetype"));
 

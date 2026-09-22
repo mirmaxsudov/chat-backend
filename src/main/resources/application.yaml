@@ -24,12 +24,20 @@ app:
       allowed-origins: http://localhost:3000
 
 attachments:
-  video-thumbnail:
-    enabled: ${VIDEO_THUMBNAIL_ENABLED:true}
-    max-width: ${VIDEO_THUMBNAIL_MAX_WIDTH:640}
-    core-pool-size: ${VIDEO_THUMBNAIL_CORE_POOL_SIZE:1}
-    max-pool-size: ${VIDEO_THUMBNAIL_MAX_POOL_SIZE:2}
-    queue-capacity: ${VIDEO_THUMBNAIL_QUEUE_CAPACITY:20}
+  media-preview:
+    enabled: ${MEDIA_PREVIEW_ENABLED:true}
+    max-width: ${MEDIA_PREVIEW_MAX_WIDTH:640}
+    max-height: ${MEDIA_PREVIEW_MAX_HEIGHT:960}
+    jpeg-quality: ${MEDIA_PREVIEW_JPEG_QUALITY:0.70}
+    max-source-pixels: ${MEDIA_PREVIEW_MAX_SOURCE_PIXELS:250000000}
+    max-attempts: ${MEDIA_PREVIEW_MAX_ATTEMPTS:3}
+    recovery-batch-size: ${MEDIA_PREVIEW_RECOVERY_BATCH_SIZE:100}
+    processing-timeout: ${MEDIA_PREVIEW_PROCESSING_TIMEOUT:10m}
+    recovery-interval-ms: ${MEDIA_PREVIEW_RECOVERY_INTERVAL_MS:60000}
+    recovery-initial-delay-ms: ${MEDIA_PREVIEW_RECOVERY_INITIAL_DELAY_MS:30000}
+    core-pool-size: ${MEDIA_PREVIEW_CORE_POOL_SIZE:1}
+    max-pool-size: ${MEDIA_PREVIEW_MAX_POOL_SIZE:2}
+    queue-capacity: ${MEDIA_PREVIEW_QUEUE_CAPACITY:50}
 
 springwolf:
   use-fqn: false

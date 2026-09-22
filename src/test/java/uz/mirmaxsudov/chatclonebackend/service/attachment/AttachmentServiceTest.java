@@ -9,6 +9,7 @@ import uz.mirmaxsudov.chatclonebackend.exceptions.AttachmentRangeNotSatisfiableE
 import uz.mirmaxsudov.chatclonebackend.model.entity.attachment.Attachment;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
+import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.PreviewStatus;
 import uz.mirmaxsudov.chatclonebackend.model.response.attachment.AttachmentClientResponse;
 import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
@@ -17,8 +18,8 @@ import uz.mirmaxsudov.chatclonebackend.storage.StorageService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.Optional;
-import java.util.Map;
 import java.util.UUID;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -133,28 +134,27 @@ class AttachmentServiceTest {
     }
 
     @Test
-    void opensGeneratedVideoThumbnail() {
-        String thumbnailStorageKey = "thumbnails/video.jpg";
+    void opensGeneratedMediaPreview() {
+        String previewStorageKey = "previews/" + ATTACHMENT_ID + "/v1.jpg";
         Attachment attachment = Attachment.builder()
                 .storageKey(STORAGE_KEY)
                 .originalFileName("video.mp4")
                 .contentType("video/mp4")
                 .type(AttachmentType.VIDEO)
                 .sizeBytes(1_000)
-                .metadata(Map.of(
-                        AttachmentService.THUMBNAIL_STORAGE_KEY_METADATA,
-                        thumbnailStorageKey
-                ))
+                .previewStatus(PreviewStatus.READY)
+                .previewStorageKey(previewStorageKey)
+                .previewContentType("image/jpeg")
                 .build();
         StatObjectResponse thumbnailStat = mock(StatObjectResponse.class);
         InputStream stream = new ByteArrayInputStream(new byte[0]);
         when(attachmentRepository.findByIdAndDeletedFalse(ATTACHMENT_ID))
                 .thenReturn(Optional.of(attachment));
-        when(storageService.statObject(thumbnailStorageKey)).thenReturn(thumbnailStat);
+        when(storageService.statObject(previewStorageKey)).thenReturn(thumbnailStat);
         when(thumbnailStat.size()).thenReturn(100L);
-        when(storageService.openObject(thumbnailStorageKey, 0, null)).thenReturn(stream);
+        when(storageService.openObject(previewStorageKey, 0, null)).thenReturn(stream);
 
-        AttachmentClientResponse response = attachmentService.getVideoThumbnail(
+        AttachmentClientResponse response = attachmentService.getPreview(
                 ATTACHMENT_ID,
                 null,
                 true
@@ -227,5 +227,33 @@ class AttachmentServiceTest {
         );
 
         assertEquals(AttachmentType.PDF, created.getType());
+        assertEquals(PreviewStatus.NOT_APPLICABLE, created.getPreviewStatus());
+    }
+
+    @Test
+    void imageAndVideoAttachmentsStartWithPendingPreviews() {
+        UUID uploaderId = UUID.randomUUID();
+        User uploader = mock(User.class);
+        when(uploader.getId()).thenReturn(uploaderId);
+        when(userRepository.getReferenceById(uploaderId)).thenReturn(uploader);
+        when(attachmentRepository.findByStorageKey(any())).thenReturn(Optional.empty());
+        when(attachmentRepository.saveAndFlush(any(Attachment.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Attachment image = attachmentService.createCompletedAttachment(
+                "uploads/photo",
+                512,
+                Map.of("contentType", "image/jpeg"),
+                uploaderId
+        );
+        Attachment video = attachmentService.createCompletedAttachment(
+                "uploads/video",
+                512,
+                Map.of("contentType", "video/mp4"),
+                uploaderId
+        );
+
+        assertEquals(PreviewStatus.PENDING, image.getPreviewStatus());
+        assertEquals(PreviewStatus.PENDING, video.getPreviewStatus());
     }
 }

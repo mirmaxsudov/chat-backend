@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties({
         MinioProperties.class,
         TusProperties.class,
-        VideoThumbnailProperties.class
+        MediaPreviewProperties.class
 })
 public class MinioConfig {
     @Bean
