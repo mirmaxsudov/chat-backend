@@ -11,18 +11,22 @@ import uz.mirmaxsudov.chatclonebackend.listener.chat.RealtimeMessagePublisher;
 import uz.mirmaxsudov.chatclonebackend.model.entity.auth.User;
 import uz.mirmaxsudov.chatclonebackend.model.request.chat.SendMessageRequest;
 import uz.mirmaxsudov.chatclonebackend.model.response.chat.ChatResponse;
+import uz.mirmaxsudov.chatclonebackend.model.response.chat.MessageResponse;
+import uz.mirmaxsudov.chatclonebackend.model.response.chat.RealtimeMessageEvent;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 
 import java.util.UUID;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import org.mockito.ArgumentCaptor;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -65,6 +69,39 @@ class RealtimeMessageAfterCommitIntegrationTest {
                 eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),
                 any()
         );
+    }
+
+    @Test
+    void messageDeletionIsPublishedToBothUsersOnlyAfterCommit() {
+        String suffix = UUID.randomUUID().toString().substring(0, 8);
+        User sender = saveUser("+99893" + suffix, "delete.sender." + suffix);
+        User recipient = saveUser("+99894" + suffix, "delete.recipient." + suffix);
+        ChatResponse chat = chatService.createOrGetDm(sender.getId(), recipient.getUsername());
+        MessageResponse message = chatService.sendMessage(
+                sender.getId(),
+                chat.id(),
+                new SendMessageRequest("Delete me", List.of())
+        );
+        clearInvocations(messagingTemplate);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            chatService.deleteMessage(sender.getId(), chat.id(), message.id());
+            verify(messagingTemplate, never()).convertAndSendToUser(
+                    any(String.class),
+                    eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),
+                    any()
+            );
+        });
+
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(messagingTemplate, times(2)).convertAndSendToUser(
+                any(String.class),
+                eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),
+                payloadCaptor.capture()
+        );
+        assertThat(payloadCaptor.getAllValues())
+                .extracting(payload -> ((RealtimeMessageEvent) payload).type())
+                .containsOnly("MESSAGE_DELETED");
     }
 
     private User saveUser(String phoneNumber, String username) {

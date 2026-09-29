@@ -111,6 +111,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return new ApiErrorResponse(exception.getMessage(), HttpStatus.BAD_REQUEST, LocalDateTime.now(), 400);
     }
 
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    @ExceptionHandler(CustomForbiddenException.class)
+    public ApiErrorResponse handleForbiddenException(CustomForbiddenException exception) {
+        return new ApiErrorResponse(exception.getMessage(), HttpStatus.FORBIDDEN, LocalDateTime.now(), 403);
+    }
+
     @ResponseStatus(HttpStatus.UNAUTHORIZED)
     @ExceptionHandler(InvalidTokenException.class)
     public ApiErrorResponse handleInvalidTokenException(InvalidTokenException exception) {

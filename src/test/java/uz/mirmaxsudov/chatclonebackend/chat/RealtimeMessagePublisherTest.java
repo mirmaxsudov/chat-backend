@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
+import uz.mirmaxsudov.chatclonebackend.event.chat.MessageDeletedEvent;
 import uz.mirmaxsudov.chatclonebackend.listener.chat.RealtimeMessagePublisher;
 import uz.mirmaxsudov.chatclonebackend.model.enums.attachment.AttachmentType;
 import uz.mirmaxsudov.chatclonebackend.model.enums.chat.ChatType;
@@ -88,6 +89,39 @@ class RealtimeMessagePublisherTest {
                 eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),
                 org.mockito.ArgumentMatchers.any(RealtimeMessageEvent.class)
         );
+    }
+
+    @Test
+    void deletedMessageIsMappedForEveryParticipant() {
+        UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
+        MessageCreatedEvent created = event(ChatType.DIRECT, senderId, List.of(senderId, recipientId));
+        MessageDeletedEvent deleted = new MessageDeletedEvent(
+                created.chatId(),
+                created.chatType(),
+                created.messageId(),
+                created.sequence(),
+                created.senderId(),
+                created.text(),
+                created.createdAt(),
+                created.recipientIds(),
+                created.attachments()
+        );
+        ArgumentCaptor<Object> payloadCaptor = ArgumentCaptor.forClass(Object.class);
+
+        publisher.publish(deleted);
+
+        verify(messagingTemplate, times(2)).convertAndSendToUser(
+                org.mockito.ArgumentMatchers.anyString(),
+                eq(RealtimeMessagePublisher.USER_MESSAGE_QUEUE),
+                payloadCaptor.capture()
+        );
+        assertThat(payloadCaptor.getAllValues())
+                .allSatisfy(payload -> {
+                    RealtimeMessageEvent realtimeEvent = (RealtimeMessageEvent) payload;
+                    assertThat(realtimeEvent.type()).isEqualTo("MESSAGE_DELETED");
+                    assertThat(realtimeEvent.message().id()).isEqualTo(created.messageId());
+                });
     }
 
     private MessageCreatedEvent event(ChatType type, UUID senderId, List<UUID> recipients) {

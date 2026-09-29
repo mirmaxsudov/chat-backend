@@ -20,4 +20,6 @@ public interface ChatService {
     MessageHistoryResponse getMessages(UUID currentUserId, UUID chatId, Long beforeSeq, int size);
 
     MessageResponse sendMessage(UUID currentUserId, UUID chatId, SendMessageRequest request);
+
+    void deleteMessage(UUID currentUserId, UUID chatId, UUID messageId);
 }

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -19,12 +20,14 @@ import uz.mirmaxsudov.chatclonebackend.repository.attachment.AttachmentRepositor
 import uz.mirmaxsudov.chatclonebackend.repository.chat.ChatMemberRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.DmLinkRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.chat.dm.SavedChatLinkRepository;
+import uz.mirmaxsudov.chatclonebackend.repository.chat.message.MessageRepository;
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -55,6 +58,12 @@ class ChatApiIntegrationTest {
 
     @Autowired
     private AttachmentRepository attachmentRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private User currentUser;
     private User targetUser;
@@ -155,6 +164,74 @@ class ChatApiIntegrationTest {
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Chat not found"));
+    }
+
+    @Test
+    void senderCanDeleteMessageAndLatestMessageFallsBackWithoutReusingSequence() throws Exception {
+        UUID chatId = createDm(currentUser, targetUser.getUsername());
+        UUID firstMessageId = sendMessageAndReturnId(currentUser, chatId, "First message", 1);
+        UUID secondMessageId = sendMessageAndReturnId(currentUser, chatId, "Second message", 2);
+
+        mockMvc.perform(delete("/api/v1/chats/{chatId}/messages/{messageId}", chatId, secondMessageId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.message").value("Message deleted"))
+                .andExpect(jsonPath("$.data").isEmpty());
+
+        assertThat(messageRepository.findById(secondMessageId)).get()
+                .extracting("deleted")
+                .isEqualTo(true);
+        assertThat(jdbcTemplate.queryForObject(
+                "select deleted from messages where id = ?",
+                Boolean.class,
+                secondMessageId
+        )).isTrue();
+
+        mockMvc.perform(get("/api/v1/chats/{chatId}", chatId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.lastMessage.id").value(firstMessageId.toString()))
+                .andExpect(jsonPath("$.data.lastMessage.text").value("First message"));
+
+        mockMvc.perform(get("/api/v1/chats/{chatId}/messages", chatId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.messages.length()").value(1))
+                .andExpect(jsonPath("$.data.messages[0].id").value(firstMessageId.toString()));
+
+        sendMessage(currentUser, chatId, "Third message", 3);
+
+        mockMvc.perform(delete("/api/v1/chats/{chatId}/messages/{messageId}", chatId, secondMessageId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Message not found"));
+    }
+
+    @Test
+    void messageDeletionEnforcesMembershipOwnershipAndChatScope() throws Exception {
+        UUID chatId = createDm(currentUser, targetUser.getUsername());
+        UUID messageId = sendMessageAndReturnId(currentUser, chatId, "Private message", 1);
+        UUID otherChatId = createDm(currentUser, outsider.getUsername());
+
+        mockMvc.perform(delete("/api/v1/chats/{chatId}/messages/{messageId}", chatId, messageId)
+                        .with(jwtFor(targetUser)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("You can only delete your own messages"));
+
+        mockMvc.perform(delete("/api/v1/chats/{chatId}/messages/{messageId}", chatId, messageId)
+                        .with(jwtFor(outsider)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Chat not found"));
+
+        mockMvc.perform(delete("/api/v1/chats/{chatId}/messages/{messageId}", otherChatId, messageId)
+                        .with(jwtFor(currentUser)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Message not found"));
+
+        assertThat(messageRepository.findById(messageId)).get()
+                .extracting("deleted")
+                .isEqualTo(false);
     }
 
     @Test
@@ -312,6 +389,22 @@ class ChatApiIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.seq").value(expectedSequence))
                 .andExpect(jsonPath("$.data.text").value(text));
+    }
+
+    private UUID sendMessageAndReturnId(User sender, UUID chatId, String text, long expectedSequence)
+            throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/v1/chats/{chatId}/messages", chatId)
+                        .with(jwtFor(sender))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"text":"%s"}
+                                """.formatted(text)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.seq").value(expectedSequence))
+                .andReturn();
+
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        return UUID.fromString(body.path("data").path("id").asText());
     }
 
     private org.springframework.test.web.servlet.request.RequestPostProcessor jwtFor(User user) {

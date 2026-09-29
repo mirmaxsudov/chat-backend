@@ -11,4 +11,7 @@ public interface ResponseSuccessBuilder {
                 .build();
     }
 
+    static <T> ApiResponse<T> success(String message) {
+        return success(message, null);
+    }
 }

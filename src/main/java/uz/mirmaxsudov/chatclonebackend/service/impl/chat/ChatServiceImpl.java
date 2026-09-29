@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uz.mirmaxsudov.chatclonebackend.event.chat.MessageCreatedEvent;
+import uz.mirmaxsudov.chatclonebackend.event.chat.MessageDeletedEvent;
 import uz.mirmaxsudov.chatclonebackend.exceptions.CustomBadRequestException;
 import uz.mirmaxsudov.chatclonebackend.exceptions.CustomNotFoundException;
 import uz.mirmaxsudov.chatclonebackend.mapper.AttachmentMapper;
@@ -33,6 +34,7 @@ import uz.mirmaxsudov.chatclonebackend.repository.chat.message.MessageRepository
 import uz.mirmaxsudov.chatclonebackend.repository.user.UserRepository;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.ChatService;
 import uz.mirmaxsudov.chatclonebackend.service.base.chat.MessageAttachmentService;
+import uz.mirmaxsudov.chatclonebackend.service.base.chat.MessageService;
 import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.DmTransactionalCreator;
 import uz.mirmaxsudov.chatclonebackend.service.impl.chat.helper.SavedChatTransactionalCreator;
 import uz.mirmaxsudov.chatclonebackend.service.presence.PresenceService;
@@ -50,17 +52,19 @@ import java.util.stream.Collectors;
 public class ChatServiceImpl implements ChatService {
     private static final long FIRST_PAGE_CURSOR = Long.MAX_VALUE;
 
+    private final DmTransactionalCreator dmTransactionalCreator;
+    private final SavedChatTransactionalCreator savedChatTransactionalCreator;
+    private final ApplicationEventPublisher eventPublisher;
+    private final MessageAttachmentService messageAttachmentService;
+    private final PresenceService presenceService;
+    private final MessageService messageService;
+
     private final UserRepository userRepository;
     private final ChatRepository chatRepository;
     private final ChatMemberRepository chatMemberRepository;
     private final DmLinkRepository dmLinkRepository;
     private final MessageRepository messageRepository;
     private final SavedChatLinkRepository savedChatLinkRepository;
-    private final DmTransactionalCreator dmTransactionalCreator;
-    private final SavedChatTransactionalCreator savedChatTransactionalCreator;
-    private final ApplicationEventPublisher eventPublisher;
-    private final MessageAttachmentService messageAttachmentService;
-    private final PresenceService presenceService;
 
     // Mappers
     private final AttachmentMapper attachmentMapper;
@@ -315,6 +319,38 @@ public class ChatServiceImpl implements ChatService {
         );
 
         return toMessageResponse(message, currentUserId, attachments);
+    }
+
+    @Override
+    @Transactional
+    public void deleteMessage(UUID currentUserId, UUID chatId, UUID messageId) {
+        Chat chat = findAccessibleChat(chatId, currentUserId);
+        Message message = messageService.delete(currentUserId, chatId, messageId);
+        List<MessageAttachment> attachments = messageAttachmentService
+                .getAttachmentsByMessageIds(List.of(messageId))
+                .getOrDefault(messageId, List.of());
+
+        List<UUID> recipientIds = chatMemberRepository.findActiveUserIdsByChatId(chatId);
+
+        eventPublisher.publishEvent(new MessageDeletedEvent(
+                chatId,
+                chat.getType(),
+                message.getId(),
+                message.getSeq(),
+                message.getSender().getId(),
+                message.getText(),
+                message.getCreatedAt(),
+                recipientIds,
+                attachmentMapper.toMessageAttachmentResponses(attachments)
+        ));
+
+        log.info(
+                "Message deleted: messageId={}, chatId={}, senderId={}, recipientCount={}",
+                messageId,
+                chatId,
+                currentUserId,
+                recipientIds.size()
+        );
     }
 
     private Chat findAccessibleChat(UUID chatId, UUID userId) {

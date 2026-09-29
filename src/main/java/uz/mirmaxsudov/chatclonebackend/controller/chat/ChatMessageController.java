@@ -62,4 +62,14 @@ public class ChatMessageController {
         );
         return ResponseEntity.ok(ResponseSuccessBuilder.success("Messages retrieved", messages));
     }
+
+    @DeleteMapping("/{chatId}/messages/{messageId}")
+    public ResponseEntity<ApiResponse<Void>> deleteMessage(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable("chatId") UUID chatId,
+            @PathVariable("messageId") UUID messageId
+    ) {
+        chatService.deleteMessage(userId(jwt), chatId, messageId);
+        return ResponseEntity.ok(ResponseSuccessBuilder.success("Message deleted"));
+    }
 }
